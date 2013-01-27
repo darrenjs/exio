@@ -2,8 +2,68 @@ TODO for libadmin
 =================
 
 ----------------------------------------------------------------------
-MAJOR
------
+ALL
+---
+
+* ximon.gui table events.  A current problem in the ximon gui is that we have
+  to hard-code teh table name and column name of xihosts.connection, so that
+  when a TCP connection to a server is lost, we can set the connectivity
+  status to down.  To make this generic, the source tables need to define a
+  set of EventActions that should apply in the case of a disconnect event.
+  Need to spell out the logic for this, and then add support in both the
+  ximon.gui and exio admin server.  Start with a design for this, then
+  implement the simplest version. Later we can consider having regexp matching
+  etc.
+
+* exio / ximon.  Standardise the approach to column styles. Currently is a bit
+  of a mess and not well defined.  Basically, we need to allow the end user to
+  specify various presentation styles for their columns, and they styles need
+  to be supported by the GUI.  The GUI should not do anything, by default.
+
+* exio.  How can we reduce the number of threads?  Can we have 1 thread per
+  session, instead of two?  Can we have 1 thread to handle all sessions?
+
+* ximon.gui -- is the GUI currently sending logon messages?
+
+* exio & clients : need a mechanism to support message splitting and
+  recombination.
+
+* exio & clients: should we group admin commands into categories?
+
+* exio : change the session ID so that it can wrap-around.  The current one
+  cannot.  Use something like a pending array with a wrap around mask.  This
+  means we will only be able to support a fixed number of simulataneous
+  clients, which is fine for now.
+
+* exio router. Would be nice to have a generic router, which connects to other
+  exio services, and then unifies them, so that clients which cannot reach
+  colo hosts instead can use the exio router (exiord). Need a design.
+
+* ximon.gui.  The "Delete All Rows" option is misleading, because it deletes
+  all rows in table XYZ, now just the visible row.  So consider renaming this
+  option. Also, is it possible to provide an option like "delete all visible
+  rows".
+
+* ximon.gui: When opening an admin pane, the title is just "Admin". Instead,
+  can we provide a better title, something that suggests which server is being
+  admin'd.
+
+* exio:  provide user authentication
+
+* ximon.gui: provide an option in the Admin pane to allow a command to be sent
+  repeatedly.
+
+* support individual row deletion.  This would require support in the
+  ximon.gui also.
+
+* ximon.gui & exio.  If the user clicks on delete row, should the gui send a
+  message to all connected sessions, requesting a snapshot?
+
+* introduce heartbeats from exio to all connected sessions. Make them
+  optional.
+
+* exio hardening: make core classes (eg SAM structures etc) exception and
+  thread safe in the copy constructors and assignment operators.
 
 * Improv: "xi.services" string appears everywhere ... make a constant. Same
   for lots of its fields.
