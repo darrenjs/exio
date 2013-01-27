@@ -99,13 +99,14 @@ void AdminIO::socket_read_TEP()
   }
   catch (...)
   {
-    /* prevent unknown exceptions from causing uncontrolled stack unwind */
+    /* Prevent unknown exceptions from causing uncontrolled stack unwind.  I
+       have observed that the only exception that gets to here is one that
+       arised when the peer has closed the socket. */
 
     // termiante the write thread
     request_stop();
   }
 
-//  _INFO_("read-thread exiting");
   m_threads_complete.incr();
 }
 //----------------------------------------------------------------------
@@ -169,8 +170,15 @@ void AdminIO::read_from_socket()
         sam::SAMProtocol protocol;
 
         QueuedItem qi;
-        qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
-        enqueue( qi );
+        try
+        {
+          qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
+          enqueue( qi );
+        }
+        catch (sam::OverFlow& err)
+        {
+          _ERROR_(m_appsvc.log(), "Failed to encode message: " << err.what());
+        }
 
         throw;
       }

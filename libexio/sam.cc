@@ -126,11 +126,9 @@ qname qname::parse(const char * src)
 //======================================================================
 
 void SAMProtocol::write_str(char* & dest,
-                            const char* src,
+                            const std::string str,
                             const char* const end)
 {
-  // TODO: should I be using 'end' for checking?
-
   /* Search for a special character.
 
      size_t strcspn(const char *s, const char *reject);
@@ -139,17 +137,20 @@ void SAMProtocol::write_str(char* & dest,
      which consists entirely of characters not in reject.
   */
 
-  size_t const len    = strlen(src);
+  const char*  src    = str.c_str();
+  size_t const len    = str.size();
   size_t const accept = strcspn(src, sam::SPECIAL_CHARS);
 
   if (accept == len)
   {
     // no special characters - yay!
+    check_space(dest, end, len);
     memcpy(dest, src, len);
     dest += len;
   }
   else
   {
+    check_space(dest, end, accept);
     memcpy(dest, src, accept);
     dest += accept;
     src  += accept;
@@ -160,6 +161,7 @@ void SAMProtocol::write_str(char* & dest,
     {
       if ( SAMProtocol::isSpecialChar(*src) )
       {
+        check_space(dest, end, 1);
         *dest = sam::ESCAPE;
         ++dest;
       }
@@ -169,23 +171,26 @@ void SAMProtocol::write_str(char* & dest,
   }
 }
 
+//----------------------------------------------------------------------
 void SAMProtocol::write_noescape(char* & dest,
                                  const char* src, size_t srclen,
                                  const char* end)
 {
+  check_space(dest, end, srclen);
   memcpy(dest, src, srclen);
   dest += srclen;
 }
 
+//----------------------------------------------------------------------
 void SAMProtocol::write_noescape(char* & dest,
                                  char c,
                                  const char* end)
 {
+  check_space(dest, end, 1);
   *dest++ = c;
 }
 
-
-
+//----------------------------------------------------------------------
 size_t SAMProtocol::encodeMsg(const txMessage& msg,
                             char* const dest,
                             size_t len)
@@ -200,7 +205,7 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
   SAMProtocol::write_noescape(p, META_DELIM, end );
 
   char* lenpos = p; // remember where we have to write length
-  SAMProtocol::write_noescape(p, lenbuf,  sizeof(lenbuf)-1, end ); // written later
+  SAMProtocol::write_noescape(p, lenbuf, sizeof(lenbuf)-1, end); // write later
 
   SAMProtocol::write_noescape(p, META_DELIM, end );
   SAMProtocol::write_noescape(p, msg.type().c_str(), msg.type().length(), end );
@@ -214,7 +219,7 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
   *p = '\0';
 
   size_t const bytes = (p - dest);
-  // TODO: check bytes <= 65536, and throw if now (or ret zero).
+  if (bytes > MAX_MSG_LEN) throw OverFlow(OverFlow::eExceedsSamLimit);
 
   // write the length
   snprintf(lenbuf, sizeof(lenbuf), "%05zu", bytes);
@@ -223,7 +228,7 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
   return bytes;
 }
 
-
+//----------------------------------------------------------------------
 bool SAMProtocol::isSpecialChar(char c)
 {
   return ( (c == MSG_START)
@@ -257,7 +262,7 @@ void SAMProtocol::encode_contents(const txContainer* c,
     }
     else if ( const txField* field = (*iter)->asField() )
     {
-      SAMProtocol::write_str(p, field->value().c_str(), end );
+      SAMProtocol::write_str(p, field->value(), end );
     }
     SAMProtocol::write_noescape(p, FIELD_DELIM, end );
   }

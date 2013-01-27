@@ -293,6 +293,7 @@ void AdminInterfaceImpl::session_msg_received(const sam::txMessage& reqmsg,
   //   _INFO_(m_logsvc,  os.str() );
   // }
 
+
   if (reqmsg.type() == id::msg_logon)
   {
     handle_logon_msg(reqmsg, session);
@@ -479,6 +480,15 @@ void AdminInterfaceImpl::housekeeping()
 
 //----------------------------------------------------------------------
 
+/*
+(gdb) where
+#0  0x00007ffff7ba1ad0 in exio::AdminInterfaceImpl::createNewSession () from /home/darrens/work/dev/src/c++/demo/install/lib/libexio.so.0
+#1  0x00007ffff7ba8f8c in exio::AdminServerSocket::accept_TEP (this=0x63bbe0) at ../../exio/libexio/AdminServerSocket.cc:261
+#2  0x00007ffff7bcc89a in cpp11::execute_native_thread_routine (__p=0x63d870) at ../../exio/libcpp11/thread.cc:21
+#3  0x00007ffff745fe9a in start_thread () from /lib/x86_64-linux-gnu/libpthread.so.0
+#4  0x00007ffff718ccbd in clone () from /lib/x86_64-linux-gnu/libc.so.6
+#5  0x0000000000000000 in ?? ()
+*/
 void AdminInterfaceImpl::createNewSession(int fd)
 {
   // TODO perform these steps individually, and catch and throw exception.
@@ -503,6 +513,7 @@ void AdminInterfaceImpl::createNewSession(int fd)
   // TODO: once the ximon is able to send logon kmessages first, then we won't
   // do this until a logon has been received from the remote.
   sam::txMessage logon(id::msg_logon);
+
   logon.root().put_field(id::QN_serviceid, m_appsvc.conf().serviceid);
   session->enqueueToSend( logon );
 
@@ -583,7 +594,7 @@ AdminResponse AdminInterfaceImpl::admincmd_info(
 
   std::ostringstream os;
   os << "serviceid: " << m_svcid << "\n";
-  os << "exio-version: " << PACKAGE_VERSION << "\n"; // TODO: take from config.h PACKAGE_VERSION
+  os << "exio-version: " << PACKAGE_VERSION << "\n";
   os << "arch: " << sizeof(long)*8 << "\n";
   os << "uptime: " << uptime.str();
 
@@ -701,6 +712,7 @@ void AdminInterfaceImpl::add_columns(const std::string& table_name,
 void AdminInterfaceImpl::handle_logon_msg(const sam::txMessage& logonmsg,
                                           AdminSession& session)
 {
+
   // TODO: for now we will automatically subscribe to all tables, unless the
   // QN_noautosub field is present. This should be changed so that a table
   // subscription is only made by the subscribe message
@@ -719,8 +731,8 @@ void AdminInterfaceImpl::handle_logon_msg(const sam::txMessage& logonmsg,
     session.wants_autoclose(true);
   }
 
-  // TODO: for now, we will also send a full description of our admins to the
-  // new session.
+  // for now, we will also send a full description of our admins to the new
+  // session.
   sam::txMessage admindescr;
   serialise_admins(admindescr);
   send_one(admindescr, session.id());

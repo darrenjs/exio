@@ -154,14 +154,23 @@ void AdminSession::enqueueToSend(const sam::txMessage& msg)
 
   sam::SAMProtocol protocol;
 
-  QueuedItem qi;
-  qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
-
   if (m_io)
   {
+    QueuedItem qi;
+    try
+    {
+      qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
+    }
+    catch (sam::OverFlow& err)
+    {
+      _ERROR_(m_appsvc.log(), "Failed to send "
+              << msg.type() <<  " message due to encode exception: "
+              << err.what());
+      return;  // return here, to prevent calling enqueue
+    }
 
-//    _INFO_("calling IO::enqueue");
     m_io->enqueue( qi );
+
   }
 }
 

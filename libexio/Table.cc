@@ -138,19 +138,6 @@ void DataTable::add_subscriber(const SID& session)
   m_subscribers.push_back( session );
 
 
-  {
-      // DEBUG
-    std::ostringstream os;
-
-    std::map<std::string, std::list<sam::txContainer> > ::iterator it;
-    for (it = m_column_attrs.begin(); it != m_column_attrs.end(); ++it)
-    {
-      os << it->first << ",";
-    }
-
-  }
-
-
   /* serialise table description */
 
   // TODO: move to a separate method, and then remove the class?
@@ -187,17 +174,6 @@ void DataTable::add_subscriber(const SID& session)
 
   /* Admin description */
 
-  sam::txMessage am("admindescr");
-  sam::txContainer& amhead = am.root().put_child("head");
-  amhead.put_field("msgtype","admindescr");
-  sam::txContainer& ambody = am.root().put_child("body");
-  sam::txContainer& amaset = ambody.put_child("adminset");
-  sam::txContainer& amadmin0 = amaset.put_child("admin_0");
-  amaset.put_field("admincount","1");
-  amadmin0.put_field("name", "XiStopComponent");
-  amadmin0.put_field("defargs", "$hostname $Binary $Instance");
-  amadmin0.put_field("short", "stop process via Xi command");
-  amadmin0.put_field("long", "Uses the XiStopComponent command to shutdown a Xi process");
 //  m_ai->send_one(am, session);
 
   // serialise table content

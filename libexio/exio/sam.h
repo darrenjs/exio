@@ -33,6 +33,7 @@ namespace sam
   static const char * const SPECIAL_CHARS =  "{}\n[],=:\\";
   static const char * const SAM_MAJOR_VER = "SAM01"; // always len 5
 
+  static const size_t MAX_MSG_LEN   = 99999;
 
   // TODO: remove from sam.h
   struct Converters
@@ -427,11 +428,40 @@ class MessageFormatter
 
 //----------------------------------------------------------------------
 
+class OverFlow : public std::exception
+{
+  public:
+
+    enum ReasonCode
+    {
+      eUnknown = 0,
+      eEncodingBufferTooSmall,
+      eExceedsSamLimit
+    } reason;
+
+    OverFlow(ReasonCode rc): reason(rc) {}
+
+    const char* what() const throw()
+    {
+      switch (reason)
+      {
+        case eEncodingBufferTooSmall : return "buffer too small";
+        case eExceedsSamLimit : return "exceeds max message size";
+        default: return "unknown";
+      }
+    }
+};
+
+//----------------------------------------------------------------------
+
 
 class SAMProtocol
 {
   public:
 
+    /* Attempt to encode the message into the buffer provided. If there is not
+     * enought room in the buffer, or the message size exceeds the SAM
+     * limit, an OverFlow exception is thrown. */
     size_t encodeMsg(const txMessage& msg,
                      char* const dest,
                      size_t len);
@@ -466,7 +496,7 @@ class SAMProtocol
     void fail(const char* error);
 
     static void write_str(char* & dest,
-                          const char* src,
+                          const std::string str,
                           const char* const end);
 
 
@@ -474,13 +504,16 @@ class SAMProtocol
                                const char* src, size_t srclen,
                                const char* end);
 
-    // static void write_noescape(char* & dest,
-    //                            const std::string& src,
-    //                            const char* end);
-
     static void write_noescape(char* & dest,
                                char c,
                                const char* end);
+
+
+    static void check_space(const char* beg, const char* end, size_t len)
+    {
+      if (len >= (size_t)(end-beg))
+        throw OverFlow(OverFlow::eEncodingBufferTooSmall);
+    }
 
     void encode_contents(const txContainer* msg,
                          char* & dest,
