@@ -104,7 +104,6 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
   private:
 
-    AdminResponse admincmd_pid(AdminRequest& r);
     AdminResponse admincmd_list_tables(AdminRequest& r);
     AdminResponse admincmd_subscribe(AdminRequest& r);
     AdminResponse admincmd_sessions(AdminRequest& r);

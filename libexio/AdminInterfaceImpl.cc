@@ -7,6 +7,9 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+
+
 
 
 #define MIN_SECS   (60)
@@ -38,11 +41,6 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
   adminattrs[ "hidden" ] = "false";
 
   /* Register some admin capabilities of an admin interface */
-  admin_add( AdminCommand("pid",
-                          "get pid of process", "",
-                          &AdminInterfaceImpl::admincmd_pid, this,
-                          adminattrs) );
-
   admin_add( AdminCommand("tables",
                           "list tables", "",
                           &AdminInterfaceImpl::admincmd_list_tables, this,
@@ -464,15 +462,6 @@ AdminCommand* AdminInterfaceImpl::admin_find(const std::string& name)
 // }
 
 //----------------------------------------------------------------------
-AdminResponse AdminInterfaceImpl::admincmd_pid(AdminRequest& r)
-{
-  std::ostringstream os;
-  os << getpid();
-
-  return AdminResponse::success(r.reqseqno, os.str());
-}
-
-//----------------------------------------------------------------------
 void AdminInterfaceImpl::housekeeping()
 {
   session_cleanup();
@@ -567,8 +556,7 @@ AdminResponse AdminInterfaceImpl::admincmd_snapshot(
   return AdminResponse::success(request.reqseqno);
 }
 //----------------------------------------------------------------------
-AdminResponse AdminInterfaceImpl::admincmd_info(
-  AdminRequest& request)
+AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
 {
   AdminResponse resp(request.reqseqno);
 
@@ -592,11 +580,39 @@ AdminResponse AdminInterfaceImpl::admincmd_info(
          << min   << " mins, "
          << sec   << " secs";
 
+
+
+
   std::ostringstream os;
   os << "serviceid: " << m_svcid << "\n";
-  os << "exio-version: " << PACKAGE_VERSION << "\n";
   os << "arch: " << sizeof(long)*8 << "\n";
-  os << "uptime: " << uptime.str();
+  os << "uptime: " << uptime.str() << "\n";
+  os << "pid: " << getpid() << "\n";
+
+
+
+  // username
+  char username[256];
+  memset(username, 0, sizeof(username));
+  if (getlogin_r(username, sizeof(username)) != 0)
+    strcpy(username, "unknown");
+  username[sizeof(username)-1] = '\0';
+  os << "user: " << username << "\n";
+
+  // hostname
+  char hostname[256];
+  memset(hostname, 0, sizeof(hostname));
+  if (gethostname(hostname, sizeof(hostname)) != 0)
+    strcpy(hostname, "unknown");
+  hostname[sizeof(hostname)-1] = '\0';
+  os << "host: " << hostname << "\n";
+
+
+  // exio api version
+  os << "exio-version: " << PACKAGE_VERSION;
+
+
+
 
   exio::add_rescode(resp.msg, 0);
   exio::set_pending(resp.msg, false);
