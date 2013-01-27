@@ -1,0 +1,350 @@
+TODO for libadmin
+=================
+
+----------------------------------------------------------------------
+MAJOR
+-----
+
+* Improv: "xi.services" string appears everywhere ... make a constant. Same
+  for lots of its fields.
+
+* Improvement: ximond program should really have a main application facade
+  class.
+
+* BUG: at moment, if regsim is killed (or ximond loses connection to regsim),
+  ximond is currently not setting the state of its processes to down.
+
+* DESIGN PROBLEM.  In the GUI, if we click "Delete all rows", the table is
+  cleared.  However, the data source is now only sending table updates, thus,
+  the full table contents don't be repopulated.
+
+* DESIGN PROBLEM.  When we have a lock protecting a collection, it is always
+  safe to take the approach of taking a copy of the collection while locked,
+  and then iterating over the collection outside of the lock?  Whole point is
+  to reduce the lock scope.
+
+* Add the AdminCommand button, to the xi.services table. Lots of stuff
+  involved with this piece of work.
+
+* Rename package to  pcam?
+
+* Introduce a callback mechanism to the monitor.  This is so that the client
+  application can be notified on events on tables.  The implementation should
+  be based on the callback framework that Session's use to subscribe to
+  tables, ie, the Session and Client are just to instances of a callback base
+  class.  So the first step in this tasks to introduce a base-class callback &
+  events and get the Session callback to be based on them.
+
+* Rationalise the main AdminInterface header file.  Possible rename to pcam.h,
+  or whatever package name we eventually use?  Also, take a look at what
+  header files are being exported, because after recent refactoring, some of
+  them may no longer be needed.
+
+* Remove the table_clear from Admin commands.
+
+* move the thread_queue inside of the QueueWriter, and add internal locking
+  there.  Also, inside the locking scope, include the isStopping flag, and
+  maybe add a new flag, isDone.  Point is, there is some code in
+  AdminSession::~AdminSession which will call close_fast, and we want to have
+  a way of briefly waiting for that queue to be written to socket before
+  closing close_fast.
+
+* admin needs to be able to display tabular data
+
+* decide: in the admin output to console, should we indicate if there is more
+  to follow?
+
+* add a debug flag to admin, to see the raw messages etc.
+
+* why are there so many TIME_WAIT sockets? I don't think it is due to the
+  ::shutdown call, so what is calling it?
+
+* instead of a blocking read, or a read with a timeout, instead use select
+  with a second file descriptor, which we can write to when we want the reader
+  thread to unblock.
+
+----------------------------------------------------------------------
+UNCLASSIFIED
+------------
+
+* think of a project name!
+
+* split sam.h so that the tx types can be used included on their own. I.e, sam
+  has nothing to do with tx.
+
+* format into an autoconf project
+  -> learn how to use auto conf
+  -> devise what the structure of the code/build should look like
+
+* For some of the tx containers, use the swap approach for writing exception
+  safe operator=
+
+* remove INFO type lines.  I don't want that style of logging.
+
+----------------------------------------------------------------------
+TEST CASES
+----------
+
+while true; do ./admin 127.0.0.1 33333 list; done
+
+----------------------------------------------------------------------
+DONE
+----
+
+
+* the sam decode must discard a connection is the leading bytes don't look
+  like a SAM message.
+
+
+----------------------------------------------------------------------
+DESIGN DISCUSSION
+-----------------
+
+
+* I used to have an admin command to delete tables.  This command was part of
+  the AdminInterface/Monitor class, to every application would automatically
+  have the ability to allow a remote admin command to clear a table.  However,
+  this turns out not to be such a good idea: allowing a table to be cleared
+  via a remote admin command means the client application, which is
+  responsible for updating the table, now has assume that its tables could be
+  cleared at any time.  I.e., on each table update iteration, the client now
+  has to check if the table has been cleared (and if so, repopulate with
+  static content); or, I need to introduce table-event callbacks into the
+  client.  Note that at some point client-callbacks will likely be added, but,
+  I am still unsure about adding admin commands (at the AdminInterface level)
+  that can clear/drop tables.  If a client application wants that
+  functionality, then they can add it.
+
+Put locks on the outside of DataTable?
+--------------------------------------
+
+/*
+ * TODO: consider placing the table lock on the outside?  -> the main problem
+ * with that is that it is going to be hard to ensure proper locking, ie, we
+ * canot be certain that all future code writte, that access the table, will
+ * properly call lock and unlock before methods calls.
+ */
+
+----------------------------------------------------------------------
+
+asp
+
+
+zmon
+
+pmax
+pmac
+
+ipad
+amp [used]
+axis [used]
+libadmin
+
+
+
+
+pmax
+
+
+amp:
+libamp
+
+admin
+libadmin
+
+
+namespace libad
+{
+}
+
+
+dot
+axe -- C++ Parser
+rex
+sky
+axis
+libaxis
+
+flex -- unix tool
+
+xray
+
+XXX it a lightwiehgt lmon
+
+pmax  <--- don't like.
+
+CCM     libccm
+    <-- but is it really command and control
+
+ARIA - advanaced robitcss interface for Applications.
+
+
+AXIA
+IAM
+
+ICM   is a C++ librayr for prvuding any application with and Intefrace for
+Control and Montr
+
+icom :
+icom
+
+servo
+
+libadmin
+
+libadmin
+
+ccm -- someone has a utility called that
+
+rex
+admin
+exmo  -- wierd sounding
+
+expo -- libexpo is part of compiz
+exim -- gone
+
+
+[pa] process / applicatio
+[mo]  monitor, observe
+[macoex] manage / admin / control / operate exect / management
+[ex] execution
+[awns] alert, warn, notify, signal
+
+
+
+como
+amox
+
+libadmin
+
+
+
+libadmin
+
+amox
+
+
+cmd
+Cmd
+ximon
+
+moa
+
+mox
+
+
+COMI  is an application command and monitoring framework that allows your
+application to be controlled via remote command, and for same application to
+publish data to be monitor.
+
+CCMXF  consists of two parts.  libxmcmd.   lilgui, is the
+
+
+MARS is an
+
+
+Control and Monotirong
+
+Ceres
+
+MARS
+
+libmars
+
+m,
+
+qualia
+
+monio
+
+
+Ceres
+quartz
+quant
+axon -- does exist, but nothing active.  Name is gone on sourceforge & google.
+Ceres -- confused pronounciation
+Admin ex
+amex
+amex
+ade
+sirius
+ceres::
+GYRO
+gyro::
+gyro
+corona
+ceres
+xerces
+cio
+comio
+CMDIO
+CMIO
+cmdio
+ceres
+imon
+imon C
+xerces
+cerse
+command
+amio
+gate
+ccm
+amio
+amio
+amio
+earth
+amio
+moio
+momo
+servo
+gyro
+amon
+apphq
+its in hq
+mu
+cameo
+AMIO
+amio
+amio
+ceres
+AMIO
+amio
+amio
+amio
+AMIO
+CaMIO
+apma
+AMMO
+AMMO
+AMMI
+moi
+sentry
+remo
+rcm
+amon
+amon  "aymon"
+exsert
+expose
+expede
+opal   -- online learning library
+star
+vesta
+ceres
+arc  --  is archive util on Linx
+rex
+axe
+apex
+hexa
+exon -- too much like Exxon
+atria
+ximo
+
+xinu
+nuxi
+ximu  xi-mu
+ximo
+exio
+ximon
+exmon  -- microsoft project
+
+

@@ -1,0 +1,229 @@
+#include "exio/AdminSession.h"
+#include "exio/AdminInterface.h"
+#include "exio/Logger.h"
+#include "exio/sam.h"
+#include "exio/MsgIDs.h"
+
+
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <strings.h>
+#include <string.h>
+
+#define READ_BUF_SIZE 65536
+
+namespace exio {
+
+struct AdminSessionIdGenerator
+{
+    static cpp11::mutex admin_sessionid_lock;
+    static unsigned long long admin_sessionid;
+
+    static unsigned long long next_admin_sessionid()
+    {
+      cpp11::lock_guard< cpp11::mutex > guard( admin_sessionid_lock );
+
+      return admin_sessionid++;
+    }
+
+};
+
+cpp11::mutex AdminSessionIdGenerator::admin_sessionid_lock;
+unsigned long long AdminSessionIdGenerator::admin_sessionid = 1;
+
+//----------------------------------------------------------------------
+
+std::ostream& operator<<(std::ostream& os, const SID& id)
+{
+  os << id.toString();
+  return os;
+}
+
+std::string SID::toString() const
+{
+  std::ostringstream os;
+  os << m_unqiue_id << "." << m_fd;
+  return os.str();
+}
+//----------------------------------------------------------------------
+SID::SID()
+  : m_unqiue_id( 0 ),
+    m_fd ( 0 ),
+    m_label( "" )
+{
+  // TODO: I want to make the ID to be even safer.  So add some extra fields:  port and time
+}
+
+SID::SID(unsigned long long id,
+         int fd,
+         const std::string& label)
+  : m_unqiue_id( id ),
+    m_fd ( fd ),
+    m_label( label )
+{
+}
+
+/*
+ * Taken from Unix Network Programming, section 3.8.  Look up sock_ntop.c for
+ * full implementation of this function.
+ */
+std::string sock_ntop(const struct sockaddr * sa,
+                      socklen_t salen)
+{
+
+  char str[128];
+
+  switch (sa->sa_family)
+  {
+    case AF_INET:
+    {
+      struct sockaddr_in * sin = (struct sockaddr_in*) sa;
+      if (inet_ntop(AF_INET, &sin->sin_addr, str, sizeof(str)) == NULL)
+        return "";
+
+      std::stringstream os;
+      os << str << ":" << ntohs(sin->sin_port);
+      return os.str();
+    }
+    default:
+      return "";
+  }
+
+}
+
+std::string sock_descr(int fd)
+{
+  struct sockaddr_storage addr;
+  socklen_t addrlen = sizeof(addr);
+
+  int __e =  getpeername(fd, (struct sockaddr *) &addr, &addrlen);
+
+  if (!__e)
+    return sock_ntop((const struct sockaddr *)&addr, addrlen);
+  else
+    return "????";
+
+
+}
+
+//----------------------------------------------------------------------
+AdminSession::AdminSession(AppSvc& appsvc,
+                           int fd,
+                           AdminSession::Listener* l)
+  : m_appsvc( appsvc),
+    m_id(AdminSessionIdGenerator::next_admin_sessionid(),
+         fd,
+         sock_descr(fd)),
+    m_session_valid(true),
+    m_listener( l ),  // need store listener before IO started
+    m_io( new AdminIO(m_appsvc, fd, this )),
+    m_autoclose(false)
+{
+ _INFO_(m_appsvc.log(), "Connected to " << m_id.addr() << " sessionid " << m_id);
+}
+//----------------------------------------------------------------------
+AdminSession::~AdminSession()
+{
+  if ( not m_io->safe_to_delete() )
+  {
+    _WARN_(m_appsvc.log(),
+           "Deleting session IO object, but it is not yet safe to delete!");
+  }
+
+  delete m_io;
+}
+
+//----------------------------------------------------------------------
+
+void AdminSession::enqueueToSend(const sam::txMessage& msg)
+{
+  if (!m_session_valid) return; // ignore request if session not valid
+
+  // TODO: reject message if session is closed.
+  // TODO: what happens if msg too large to encode?
+
+
+  // {
+  //   sam::MessageFormatter msgfmt;
+  //   std::ostringstream os;
+  //   msgfmt.format(msg, os);
+
+  //   _INFO_(m_appsvc.log(), "Sending: " << os.str() );
+  // }
+
+  sam::SAMProtocol protocol;
+
+  QueuedItem qi;
+  qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
+
+  if (m_io)
+  {
+
+//    _INFO_("calling IO::enqueue");
+    m_io->enqueue( qi );
+  }
+}
+
+//----------------------------------------------------------------------
+
+void AdminSession::close_io()
+{
+  //_INFO_(m_appsvc.log(), "AdminSession::close_io");
+  m_io->request_stop();
+}
+
+//----------------------------------------------------------------------
+/**
+ * A SAM message has been read from the client socket.  It represents a client
+ * request. So here we start the process of routing it to possibly a client
+ * callback.
+ */
+void AdminSession::io_onmsg(const sam::txMessage& msg)
+{
+  if (!m_session_valid) return; // ignore request if session not valid
+
+  // We can handle some messages within the session
+
+  // Identify the message
+  if (msg.type() == id::msg_logon)
+  {
+    const sam::txField* fsvcid = msg.root().find_field(id::QN_serviceid);
+    if (fsvcid and m_serviceid.empty())
+    {
+      // only allow update if m_serviceid is empty, to prevent changing
+      // service-id on a single session.
+      m_serviceid = fsvcid->value();
+    }
+
+    /* NOTE: we allow logon to continue further up the stack */
+  }
+
+  if (m_listener) m_listener->session_msg_received( msg, *this);
+}
+
+//----------------------------------------------------------------------
+
+void AdminSession::io_closed()
+{
+//  _INFO_("AdminSession::io_closed");
+  m_session_valid = false;
+
+  m_listener->session_closed( *this );
+
+  // lets forget about our listener
+  m_listener = NULL;
+}
+
+//----------------------------------------------------------------------
+
+bool AdminSession::safe_to_delete() const
+{
+  return (m_session_valid==false and m_io->safe_to_delete());
+}
+
+//----------------------------------------------------------------------
+
+
+
+} // namespace qm
