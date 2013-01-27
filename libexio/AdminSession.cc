@@ -120,7 +120,6 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_io( new AdminIO(m_appsvc, fd, this )),
     m_autoclose(false)
 {
- _INFO_(m_appsvc.log(), "Connected to " << m_id.addr() << " sessionid " << m_id);
 }
 //----------------------------------------------------------------------
 AdminSession::~AdminSession()

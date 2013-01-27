@@ -9,16 +9,11 @@
 #include <unistd.h>
 #include <string.h>
 
-
-
-
 #define MIN_SECS   (60)
 #define HOUR_SECS  (60 * 60)
 #define DAY_SECS   (24 * 60 * 60)
 
 namespace exio {
-
-
 
 //----------------------------------------------------------------------
 
@@ -471,12 +466,10 @@ void AdminInterfaceImpl::housekeeping()
 
 /*
 (gdb) where
-#0  0x00007ffff7ba1ad0 in exio::AdminInterfaceImpl::createNewSession () from /home/darrens/work/dev/src/c++/demo/install/lib/libexio.so.0
-#1  0x00007ffff7ba8f8c in exio::AdminServerSocket::accept_TEP (this=0x63bbe0) at ../../exio/libexio/AdminServerSocket.cc:261
-#2  0x00007ffff7bcc89a in cpp11::execute_native_thread_routine (__p=0x63d870) at ../../exio/libcpp11/thread.cc:21
-#3  0x00007ffff745fe9a in start_thread () from /lib/x86_64-linux-gnu/libpthread.so.0
-#4  0x00007ffff718ccbd in clone () from /lib/x86_64-linux-gnu/libc.so.6
-#5  0x0000000000000000 in ?? ()
+exio::AdminInterfaceImpl::createNewSession () from /home/darrens/work/dev/src/c++/demo/install/lib/libexio.so.0
+exio::AdminServerSocket::accept_TEP (this=0x63bbe0) at ../../exio/libexio/AdminServerSocket.cc:261
+cpp11::execute_native_thread_routine (__p=0x63d870) at ../../exio/libcpp11/thread.cc:21
+start_thread () from /lib/x86_64-linux-gnu/libpthread.so.0
 */
 void AdminInterfaceImpl::createNewSession(int fd)
 {
@@ -485,7 +478,11 @@ void AdminInterfaceImpl::createNewSession(int fd)
   // must close the session straigth away -- but, don't throw is closing a
   // valid session, because we don't want the called to think the socket
   // needs to be closed.
+
   AdminSession* session = new AdminSession(m_appsvc, fd, this);
+  _INFO_(m_appsvc.log(), "Connection from "
+         << session->id().addr()
+         << " sessionid " << session->id());
 
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);

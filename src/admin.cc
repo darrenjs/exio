@@ -34,243 +34,275 @@ class AdminListener : public exio::AdminSession::Listener
 {
   public:
 
-    AdminListener()
-      : m_session_open( true )
-    {
-    }
-
-    void trigger_close()
-    {
-      cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
-      m_session_open = false;
-      m_convar.notify_one();
-    }
-
-    void handle_table_response(const sam::txContainer* body)
-    {
-      /* handler for: body.resptype=table */
-
-      typedef std::vector<std::string>::const_iterator VSIter;
-
-      bool synthetic = (body->find_field(exio::id::synthetic) != NULL);
-
-      const sam::txContainer * respdata    = body->find_child(exio::id::respdata);
-      if (!respdata) return;
-
-      const sam::txContainer * tabledescr  = respdata->find_child(exio::id::tabledescr);
-      const sam::txContainer * tableupdate = respdata->find_child(exio::id::tableupdate);
-
-      std::vector< std::string > columns;
-      if (tabledescr)
-      {
-        const sam::txContainer * c_columns = tabledescr->find_child(exio::id::columns);
-        if (c_columns)
-        {
-          size_t msgcount = 0;
-          const sam::txField * fmsgcount = c_columns->find_field(exio::id::msgcount);
-          if (fmsgcount) msgcount = atoi( fmsgcount->value().c_str() );
-
-          for (size_t msgn = 0; msgn < msgcount; ++msgn)
-          {
-            std::ostringstream os;
-            os << exio::id::msg_prefix << msgn;
-            const sam::txContainer * c_msgn = c_columns->find_child(os.str());
-            if (c_msgn)
-            {
-              const sam::txField * f_colname
-                = c_msgn->find_field(exio::id::colname);
-              if (f_colname)
-              {
-                if (synthetic and f_colname->value() == exio::id::row_key)
-                  continue;
-                columns.push_back( f_colname->value() );
-              }
-            }
-          }
-        }
-      }
-
-      if (!columns.empty() and !synthetic)
-      {
-        for (VSIter it = columns.begin(); it != columns.end(); ++it)
-        {
-          if (it != columns.begin()) std::cout << ", ";
-          std::cout << *it;
-        }
-        std::cout << "\n";
-      }
-
-
-      if (tableupdate)
-      {
-        // iterate over all the rows
-        for (sam::ChildMap::const_iterator citer = tableupdate->child_begin();
-              citer != tableupdate->child_end(); ++citer)
-        {
-          bool usedelim = false;
-
-          const sam::txContainer* child = citer->second;
-
-
-          // iterate over know columns
-          for (VSIter it = columns.begin(); it != columns.end(); ++it)
-          {
-            if (usedelim) std::cout << ", "; else usedelim=true;
-            const sam::txField * f_ptr = child->find_field( *it );
-            if (f_ptr) std::cout << f_ptr->value();
-            else std::cout << "";
-          }
-
-          // // iterate over all the fields
-          // for (sam::FieldMap::const_iterator f = child->field_begin();
-          //     f != child->field_end(); ++f)
-          // {
-          //   if (f->first == exio::id::row_key) continue;
-          //   if (usedelim) std::cout << ", "; else usedelim=true;
-          //   std::cout << f->second->value();
-          // }
-          std::cout << "\n";
-        }
-      }
-
-    }
-
-    void handle_reponse(const sam::txMessage& msg,
-                        exio::AdminSession& session)
-    {
-      const sam::txField* rescode = msg.root().find_field(exio::id::QN_rescode);
-      const sam::txField* restext = msg.root().find_field(exio::id::QN_restext);
-
-      int retval = (rescode)? atoi( rescode->value().c_str() ) : -1;
-
-      std::cout << retval;
-      if (retval == 0)
-        std::cout << " OK, ";  // Inspired by ZX Spectrum format!!! ;-)
-      else
-        std::cout << " FAIL, ";
-
-      if (restext) std::cout << restext->value();
-      std::cout << '\n';  // terminate the response summary
-
-      /* process head */
-      const sam::txContainer * body = msg.root().find_child("body");
-
-      /* process body
-       *
-       * Here we need to identify where in the message the data can be
-       * found. EXIO supports several data-structures, so each of them must be
-       * supported here.
-       */
-      if (body and body->check_field(exio::id::resptype, exio::id::table))
-      {
-        handle_table_response( body );
-      }
-      else if (body and body->check_field(exio::id::resptype, exio::id::text))
-      {
-        const sam::txContainer * respdata =
-          body->find_child(exio::id::respdata);
-
-        if (respdata)
-        {
-          const sam::txField* text = respdata->find_field(exio::id::text);
-          if (text != NULL and text->value().size() )
-          {
-            std::cout << text->value() << "\n";
-          }
-        }
-      }
-      else
-      {
-        std::cout << "NO FORMAT\n";
-      }
-      // {
-      //   const sam::txContainer * data = NULL;
-      //   if (body) data = body->find_child("data");
-      //   if (data)
-      //   {
-      //     for( sam::ChildMap::const_iterator iter = data->child_begin();
-      //          iter != data->child_end(); ++iter)
-      //     {
-      //       const sam::txField* value  = iter->second->find_field("value");
-      //       const sam::txField* format = iter->second->find_field("format");
-
-      //       if (format and value and (format->value() == "scalar"))
-      //       {
-      //         std::cout << value->value() << "\n";
-      //       }
-      //     }
-      //   }
-      // }
-
-      if ( not exio::has_pending(msg) )
-      {
-        trigger_close();
-        return;
-      }
-    }
+    AdminListener();
 
     /* inherited from AdminSession::Listener */
-    virtual void session_msg_received(const sam::txMessage& msg,
-                                      exio::AdminSession& session)
-    {
-      if (verbose > 0)
-      {
-        // if we are here, then just dump the message to cout
-        sam::MessageFormatter fmt(true);
-        std::cout <<"MESSAGE: ";
-        fmt.format( msg, std::cout );
-        std::cout << "\n";
-        std::cout.flush();
-      }
-
-      // Does this look like a bye ?
-      if (msg.type() == exio::id::msg_bye )
-      {
-        trigger_close();
-        return;
-      }
-
-      // Does this look like a response to a request?
-      if (msg.root().check_field( exio::id::QN_msgtype, exio::id::msg_response ))
-      {
-        handle_reponse(msg, session);
-        return;
-      }
-
-      // skip some expected message types
-      if (msg.root().name() == exio::id::msg_logon ) // TODO: in above handlers, check the message type using name.() like here, instead of the msgtype field
-      {
-        return;
-      }
-
-      // if we are here, then just dump the message to cout
-      sam::MessageFormatter fmt(true);
-      fmt.format( msg, std::cout );
-      std::cout << "\n";
-      std::cout.flush();
-    }
-
-    virtual void session_closed(exio::AdminSession& /*session*/)
-    {
-      cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
-      m_session_open = false;
-      m_convar.notify_one();
-    }
+    virtual void session_msg_received(const sam::txMessage&,
+                                      exio::AdminSession&);
+    virtual void session_closed(exio::AdminSession&);
 
 
-    void wait_for_session_closure()
-    {
-      cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
-      while ( m_session_open ) { m_convar.wait(lock); }
-    }
+    void wait_for_session_closure();
+
+    void show_unsol_messages(bool b) { m_show_unsol = b; }
 
   private:
+
+    void trigger_close();
+
+    void handle_table_response(const sam::txContainer* body);
+
+
+    void handle_reponse(const sam::txMessage& msg,
+                        exio::AdminSession& session);
+
 
     cpp11::condition_variable m_convar;
     cpp11::mutex m_mutex;
     bool m_session_open;
+    bool m_show_unsol;
 };
+//----------------------------------------------------------------------
+AdminListener::AdminListener()
+  : m_session_open( true ),
+    m_show_unsol(false)
+{
+}
+//----------------------------------------------------------------------
+void AdminListener::trigger_close()
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  m_session_open = false;
+  m_convar.notify_one();
+}
+//----------------------------------------------------------------------
+void AdminListener::handle_table_response(const sam::txContainer* body)
+{
+  /* handler for: body.resptype=table */
 
+  typedef std::vector<std::string>::const_iterator VSIter;
+
+  bool synthetic = (body->find_field(exio::id::synthetic) != NULL);
+
+  const sam::txContainer * respdata    = body->find_child(exio::id::respdata);
+  if (!respdata) return;
+
+  const sam::txContainer * tabledescr  = respdata->find_child(exio::id::tabledescr);
+  const sam::txContainer * tableupdate = respdata->find_child(exio::id::tableupdate);
+
+  std::vector< std::string > columns;
+  if (tabledescr)
+  {
+    const sam::txContainer * c_columns = tabledescr->find_child(exio::id::columns);
+    if (c_columns)
+    {
+      size_t msgcount = 0;
+      const sam::txField * fmsgcount = c_columns->find_field(exio::id::msgcount);
+      if (fmsgcount) msgcount = atoi( fmsgcount->value().c_str() );
+
+      for (size_t msgn = 0; msgn < msgcount; ++msgn)
+      {
+        std::ostringstream os;
+        os << exio::id::msg_prefix << msgn;
+        const sam::txContainer * c_msgn = c_columns->find_child(os.str());
+        if (c_msgn)
+        {
+          const sam::txField * f_colname
+            = c_msgn->find_field(exio::id::colname);
+          if (f_colname)
+          {
+            if (synthetic and f_colname->value() == exio::id::row_key)
+              continue;
+            columns.push_back( f_colname->value() );
+          }
+        }
+      }
+    }
+  }
+
+  if (!columns.empty() and !synthetic)
+  {
+    for (VSIter it = columns.begin(); it != columns.end(); ++it)
+    {
+      if (it != columns.begin()) std::cout << ", ";
+      std::cout << *it;
+    }
+    std::cout << "\n";
+  }
+
+
+  if (tableupdate)
+  {
+    // iterate over all the rows
+    for (sam::ChildMap::const_iterator citer = tableupdate->child_begin();
+         citer != tableupdate->child_end(); ++citer)
+    {
+      bool usedelim = false;
+
+      const sam::txContainer* child = citer->second;
+
+
+      // iterate over know columns
+      for (VSIter it = columns.begin(); it != columns.end(); ++it)
+      {
+        if (usedelim) std::cout << ", "; else usedelim=true;
+        const sam::txField * f_ptr = child->find_field( *it );
+        if (f_ptr) std::cout << f_ptr->value();
+        else std::cout << "";
+      }
+
+      // // iterate over all the fields
+      // for (sam::FieldMap::const_iterator f = child->field_begin();
+      //     f != child->field_end(); ++f)
+      // {
+      //   if (f->first == exio::id::row_key) continue;
+      //   if (usedelim) std::cout << ", "; else usedelim=true;
+      //   std::cout << f->second->value();
+      // }
+      std::cout << "\n";
+    }
+  }
+
+}
+
+//----------------------------------------------------------------------
+void AdminListener::handle_reponse(const sam::txMessage& msg,
+                                   exio::AdminSession& session)
+{
+  const sam::txField* rescode = msg.root().find_field(exio::id::QN_rescode);
+  const sam::txField* restext = msg.root().find_field(exio::id::QN_restext);
+
+  int retval = (rescode)? atoi( rescode->value().c_str() ) : -1;
+
+  std::cout << retval;
+  if (retval == 0)
+    std::cout << " OK, ";  // Inspired by ZX Spectrum format!!! ;-)
+  else
+    std::cout << " FAIL, ";
+
+  if (restext) std::cout << restext->value();
+  std::cout << '\n';  // terminate the response summary
+
+  /* process head */
+  const sam::txContainer * body = msg.root().find_child("body");
+
+  /* process body
+   *
+   * Here we need to identify where in the message the data can be
+   * found. EXIO supports several data-structures, so each of them must be
+   * supported here.
+   */
+  if (body and body->check_field(exio::id::resptype, exio::id::table))
+  {
+    handle_table_response( body );
+  }
+  else if (body and body->check_field(exio::id::resptype, exio::id::text))
+  {
+    const sam::txContainer * respdata =
+      body->find_child(exio::id::respdata);
+
+    if (respdata)
+    {
+      const sam::txField* text = respdata->find_field(exio::id::text);
+      if (text != NULL and text->value().size() )
+      {
+        std::cout << text->value() << "\n";
+      }
+    }
+  }
+  else
+  {
+    std::cout << "NO FORMAT\n";
+  }
+  // {
+  //   const sam::txContainer * data = NULL;
+  //   if (body) data = body->find_child("data");
+  //   if (data)
+  //   {
+  //     for( sam::ChildMap::const_iterator iter = data->child_begin();
+  //          iter != data->child_end(); ++iter)
+  //     {
+  //       const sam::txField* value  = iter->second->find_field("value");
+  //       const sam::txField* format = iter->second->find_field("format");
+
+  //       if (format and value and (format->value() == "scalar"))
+  //       {
+  //         std::cout << value->value() << "\n";
+  //       }
+  //     }
+  //   }
+  // }
+
+  if ( not exio::has_pending(msg) )
+  {
+    trigger_close();
+    return;
+      }
+}
+
+//----------------------------------------------------------------------
+void AdminListener::session_msg_received(const sam::txMessage& msg,
+                                         exio::AdminSession& session)
+{
+  if (verbose > 0)
+  {
+    // if we are here, then just dump the message to cout
+    sam::MessageFormatter fmt(true);
+    std::cout <<"MESSAGE: ";
+    fmt.format( msg, std::cout );
+    std::cout << "\n";
+    std::cout.flush();
+  }
+
+  // Does this look like a bye ?
+  if (msg.type() == exio::id::msg_bye )
+  {
+    trigger_close();
+    return;
+  }
+
+  // Does this look like a response to a request?
+  if (msg.root().check_field( exio::id::QN_msgtype, exio::id::msg_response ))
+  {
+    handle_reponse(msg, session);
+    return;
+  }
+
+  // skip some expected message types
+  if (msg.root().name() == exio::id::msg_logon ) // TODO: in above handlers, check the message type using name.() like here, instead of the msgtype field
+  {
+    return;
+  }
+
+
+  /* If we are here, it looks like an unsoliticed message, which we may want
+   * to display. */
+  if (m_show_unsol)
+  {
+    sam::MessageFormatter fmt(true);
+    fmt.format( msg, std::cout );
+    std::cout << "\n";
+    std::cout.flush();
+  }
+}
+
+//----------------------------------------------------------------------
+void AdminListener::session_closed(exio::AdminSession& /*session*/)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  m_session_open = false;
+  m_convar.notify_one();
+}
+
+//----------------------------------------------------------------------
+void AdminListener::wait_for_session_closure()
+{
+  cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
+  while ( m_session_open ) { m_convar.wait(lock); }
+}
+
+//----------------------------------------------------------------------
+//----------------------------------------------------------------------
 
 
 
@@ -475,7 +507,6 @@ int main(const int argc, char** argv)
     std::string cmd;
     std::list< std::string > cmdargs;
 
-
     while (i < argc)
     {
       if (strcmp(argv[i], "-v") == 0)
@@ -523,6 +554,8 @@ int main(const int argc, char** argv)
     // TODO: build up an admin service ID
 
     AdminListener listener;
+
+    if (cmd.empty()) listener.show_unsol_messages(true);
 
     exio::AdminSession adminsession(appsvc, s, &listener);
 
