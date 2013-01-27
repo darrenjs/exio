@@ -136,9 +136,9 @@ AdminSession::~AdminSession()
 
 //----------------------------------------------------------------------
 
-void AdminSession::enqueueToSend(const sam::txMessage& msg)
+bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 {
-  if (!m_session_valid) return; // ignore request if session not valid
+  if (!m_session_valid) return true; // ignore request if session not valid
 
   // TODO: reject message if session is closed.
   // TODO: what happens if msg too large to encode?
@@ -152,26 +152,42 @@ void AdminSession::enqueueToSend(const sam::txMessage& msg)
   //   _INFO_(m_appsvc.log(), "Sending: " << os.str() );
   // }
 
-  sam::SAMProtocol protocol;
-
   if (m_io)
   {
     QueuedItem qi;
+    sam::SAMProtocol protocol;
     try
     {
-      qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
+      qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity());
+      m_io->enqueue( qi );
+      return false;  // success
     }
     catch (sam::OverFlow& err)
     {
       _ERROR_(m_appsvc.log(), "Failed to send "
               << msg.type() <<  " message due to encode exception: "
               << err.what());
-      return;  // return here, to prevent calling enqueue
     }
-
-    m_io->enqueue( qi );
+    catch (std::exception& err)
+    {
+      _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
+              << msg.type() <<  " message due to exception: "
+              << err.what());
+    }
+    catch (...)
+    {
+      _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
+              << msg.type() <<  " message due to unknown exception");
+    }
+  }
+  else
+  {
+    _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
+            << msg.type() <<  " message because IO object not available");
 
   }
+
+  return true; // failure
 }
 
 //----------------------------------------------------------------------

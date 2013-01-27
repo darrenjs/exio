@@ -43,7 +43,10 @@ class AdminSession : public AdminIO::Listener
                  Listener* l);
     ~AdminSession();
 
-    void enqueueToSend(const sam::txMessage&);
+    /* Error code indicates success.  Zero/false means no error.  Other
+     * returns value indicates encoding or IO problem. */
+    bool enqueueToSend(const sam::txMessage&);
+
     void close_io();
 
     bool is_open() const { return m_session_valid; }
