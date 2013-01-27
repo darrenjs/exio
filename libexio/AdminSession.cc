@@ -166,6 +166,26 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
       _ERROR_(m_appsvc.log(), "Failed to send "
               << msg.type() <<  " message due to encode exception: "
               << err.what());
+
+      // // TODO experimental
+      // size_t n = protocol.calcEncodeSize(msg);
+      // _INFO_(m_appsvc.log(), "Estimate size required: " << n);
+
+      // size_t tmpsz = (size_t) (n * 1.10);
+      // char * tmp = new char[ tmpsz ];
+      // memset(tmp, 0, tmpsz);
+
+      // try
+      // {
+      //   size_t len = protocol.encodeMsg(msg, tmp, tmpsz);
+      //   _INFO_(m_appsvc.log(), "Encoding works, used a length of " << len
+      //          << ": " << tmp)
+      // }
+      // catch (...)
+      // {
+      //   _ERROR_(m_appsvc.log(), "Encoding still did not work");
+      // }
+      // delete [] tmp;
     }
     catch (std::exception& err)
     {

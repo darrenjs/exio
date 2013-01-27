@@ -86,8 +86,6 @@ ALL
 * Add the AdminCommand button, to the xi.services table. Lots of stuff
   involved with this piece of work.
 
-* Rename package to  pcam?
-
 * Introduce a callback mechanism to the monitor.  This is so that the client
   application can be notified on events on tables.  The implementation should
   be based on the callback framework that Session's use to subscribe to
@@ -127,7 +125,7 @@ ALL
 UNCLASSIFIED
 ------------
 
-* think of a project name!
+* Change project name, to "expose" maybe?
 
 * split sam.h so that the tx types can be used included on their own. I.e, sam
   has nothing to do with tx.
@@ -188,136 +186,70 @@ Put locks on the outside of DataTable?
 ----------------------------------------------------------------------
 
 asp
-
-
 zmon
-
 pmax
 pmac
-
 ipad
 amp [used]
 axis [used]
 libadmin
-
-
-
-
 pmax
-
-
 amp:
 libamp
-
 admin
 libadmin
-
-
 namespace libad
-{
-}
-
-
 dot
 axe -- C++ Parser
 rex
 sky
 axis
 libaxis
-
 flex -- unix tool
-
 xray
-
 XXX it a lightwiehgt lmon
-
 pmax  <--- don't like.
-
-CCM     libccm
-    <-- but is it really command and control
-
+CCM     libccm     <-- but is it really command and control
 ARIA - advanaced robitcss interface for Applications.
-
-
 AXIA
 IAM
-
 ICM   is a C++ librayr for prvuding any application with and Intefrace for
 Control and Montr
-
 icom :
 icom
-
 servo
-
 libadmin
-
-libadmin
-
 ccm -- someone has a utility called that
-
 rex
 admin
 exmo  -- wierd sounding
-
 expo -- libexpo is part of compiz
 exim -- gone
-
-
 [pa] process / applicatio
 [mo]  monitor, observe
 [macoex] manage / admin / control / operate exect / management
 [ex] execution
 [awns] alert, warn, notify, signal
-
-
-
 como
 amox
-
 libadmin
-
-
-
 libadmin
-
 amox
-
-
 cmd
 Cmd
-ximon
-
 moa
-
 mox
-
-
 COMI  is an application command and monitoring framework that allows your
 application to be controlled via remote command, and for same application to
 publish data to be monitor.
-
 CCMXF  consists of two parts.  libxmcmd.   lilgui, is the
-
-
 MARS is an
-
-
 Control and Monotirong
-
 Ceres
-
 MARS
-
 libmars
-
-m,
-
 qualia
-
 monio
-
-
 Ceres
 quartz
 quant
@@ -398,7 +330,6 @@ hexa
 exon -- too much like Exxon
 atria
 ximo
-
 xinu
 nuxi
 ximu  xi-mu

@@ -129,6 +129,9 @@ void SAMProtocol::write_str(char* & dest,
                             const std::string str,
                             const char* const end)
 {
+  /* WARNING: any changes to the encoding must be reflected in the
+   * corresponding _calc method. */
+
   /* Search for a special character.
 
      size_t strcspn(const char *s, const char *reject);
@@ -172,13 +175,61 @@ void SAMProtocol::write_str(char* & dest,
 }
 
 //----------------------------------------------------------------------
+void SAMProtocol::write_str_calc(const std::string str, size_t & n)
+{
+  /* Search for a special character.
+
+     size_t strcspn(const char *s, const char *reject);
+
+     The strcspn() function calculates the length of the initial segment of s
+     which consists entirely of characters not in reject.
+  */
+
+  const char*  src    = str.c_str();
+  size_t const len    = str.size();
+  size_t const accept = strcspn(src, sam::SPECIAL_CHARS);
+
+  if (accept == len)
+  {
+    // no special characters - yay!
+    n += len;
+  }
+  else
+  {
+    n += accept;
+
+    // now write out the region containing special chars, which has to be done
+    // character by character
+    for (size_t i = 0; i < (len-accept); ++i)
+    {
+      if ( SAMProtocol::isSpecialChar(*src) )
+      {
+        n++;
+      }
+
+      n++;
+    }
+  }
+}
+
+//----------------------------------------------------------------------
 void SAMProtocol::write_noescape(char* & dest,
                                  const char* src, size_t srclen,
                                  const char* end)
 {
+  /* WARNING: any changes to the encoding must be reflected in the
+   * corresponding _calc method. */
+
   check_space(dest, end, srclen);
   memcpy(dest, src, srclen);
   dest += srclen;
+}
+
+//----------------------------------------------------------------------
+void SAMProtocol::write_noescape_calc(const char* src, size_t srclen,
+                                      size_t& n)
+{
+  n += srclen;
 }
 
 //----------------------------------------------------------------------
@@ -186,8 +237,17 @@ void SAMProtocol::write_noescape(char* & dest,
                                  char c,
                                  const char* end)
 {
+  /* WARNING: any changes to the encoding must be reflected in the
+   * corresponding _calc method. */
+
   check_space(dest, end, 1);
   *dest++ = c;
+}
+
+//----------------------------------------------------------------------
+void SAMProtocol::write_noescape_calc(char c, size_t& n)
+{
+  n++;
 }
 
 //----------------------------------------------------------------------
@@ -195,6 +255,9 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
                             char* const dest,
                             size_t len)
 {
+  /* WARNING: any changes to the encoding must be reflected in the
+   * corresponding _calc method. */
+
   char lenbuf[6] = {'0','0','0','0','0','\0'}; // strlen=5!
 
   char * p = dest;
@@ -229,6 +292,32 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
 }
 
 //----------------------------------------------------------------------
+size_t SAMProtocol::encodeMsg_calc(const txMessage& msg)
+{
+  size_t n = 0;
+
+  char lenbuf[6] = {'0','0','0','0','0','\0'}; // strlen=5!
+
+  SAMProtocol::write_noescape_calc(MSG_START, n);
+  SAMProtocol::write_noescape_calc(sam::SAM0100, 7, n);
+  SAMProtocol::write_noescape_calc(META_DELIM, n);
+
+  SAMProtocol::write_noescape_calc(lenbuf, sizeof(lenbuf)-1, n);
+
+  SAMProtocol::write_noescape_calc(META_DELIM, n);
+  SAMProtocol::write_noescape_calc(msg.type().c_str(), msg.type().length(), n);
+  SAMProtocol::write_noescape_calc(META_DELIM, n);
+
+  encode_contents_calc( &( msg.root() ), n);
+
+  SAMProtocol::write_noescape_calc(MSG_END, n);
+  SAMProtocol::write_noescape_calc(MSG_DELIM , n);
+
+  n++;
+
+  return n;
+}
+//----------------------------------------------------------------------
 bool SAMProtocol::isSpecialChar(char c)
 {
   return ( (c == MSG_START)
@@ -243,10 +332,14 @@ bool SAMProtocol::isSpecialChar(char c)
     );
 }
 
+//----------------------------------------------------------------------
 void SAMProtocol::encode_contents(const txContainer* c,
                                   char* & p,
                                   const char* const end)
 {
+  /* WARNING: any changes to the encoding must be reflected in the
+   * corresponding _calc method. */
+
   SAMProtocol::write_noescape(p, SEQ_START, end );
   for (ItemList::const_iterator iter = c -> items().begin();
        iter != c -> items().end(); ++iter)
@@ -270,7 +363,33 @@ void SAMProtocol::encode_contents(const txContainer* c,
   SAMProtocol::write_noescape(p, SEQ_END, end );
 }
 
+//----------------------------------------------------------------------
+void SAMProtocol::encode_contents_calc(const txContainer* c, size_t& n)
+{
+  SAMProtocol::write_noescape_calc(SEQ_START, n);
 
+  for (ItemList::const_iterator iter = c -> items().begin();
+       iter != c -> items().end(); ++iter)
+  {
+    SAMProtocol::write_noescape_calc((*iter)->name().c_str(),
+                                     (*iter)->name().length(),
+                                     n);
+    SAMProtocol::write_noescape_calc(VALUE_DELIM, n);
+    if ( const txContainer* child = (*iter)->asContainer() )
+    {
+      encode_contents_calc(child, n);
+    }
+    else if ( const txField* field = (*iter)->asField() )
+    {
+      SAMProtocol::write_str_calc(field->value(), n);
+    }
+    SAMProtocol::write_noescape_calc(FIELD_DELIM, n);
+  }
+
+  SAMProtocol::write_noescape_calc(SEQ_END, n);
+}
+
+//----------------------------------------------------------------------
 size_t SAMProtocol::decodeMsg(txMessage& msg,
                               const char* start,
                               const char* end)

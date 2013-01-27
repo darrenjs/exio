@@ -466,6 +466,8 @@ class SAMProtocol
                      char* const dest,
                      size_t len);
 
+    size_t encodeMsg_calc(const txMessage& msg);
+
     /* Minimum raw bytes needed to determine message length */
     size_t head_len() const { return 14; } // {SAM0100:00000
 /*
@@ -495,19 +497,19 @@ class SAMProtocol
     const char* decode(txContainer* parent, const char* p, const char* end);
     void fail(const char* error);
 
-    static void write_str(char* & dest,
-                          const std::string str,
+    static void write_str(char* & dest, const std::string str,
                           const char* const end);
+    static void write_str_calc(const std::string str, size_t & n);
 
 
     static void write_noescape(char* & dest,
                                const char* src, size_t srclen,
                                const char* end);
+    static void write_noescape_calc(const char* src, size_t srclen, size_t& n);
 
-    static void write_noescape(char* & dest,
-                               char c,
-                               const char* end);
 
+    static void write_noescape(char* & dest, char c, const char* end);
+    static void write_noescape_calc(char c, size_t& n);
 
     static void check_space(const char* beg, const char* end, size_t len)
     {
@@ -518,6 +520,7 @@ class SAMProtocol
     void encode_contents(const txContainer* msg,
                          char* & dest,
                          const char* const end);
+    void encode_contents_calc(const txContainer* msg, size_t& n);
 
 
 

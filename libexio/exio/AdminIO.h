@@ -15,6 +15,7 @@ class AppSvc;
 struct QueuedItem
 {
     char   buf[sam::MAX_MSG_LEN];  // TODO: better to use dynamic memory
+//    char   buf[300];  // TODO: better to use dynamic memory
 
     /* number of bytes actually used */
     size_t   size;
