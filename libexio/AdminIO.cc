@@ -172,7 +172,7 @@ void AdminIO::read_from_socket()
         QueuedItem qi;
         try
         {
-          qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity() );
+          qi.size = protocol.encodeMsg(msg, qi.buf(), qi.capacity());
           enqueue( qi );
         }
         catch (sam::OverFlow& err)
@@ -313,7 +313,7 @@ void AdminIO::socket_write()
       {
         int fd = m_fd;
 
-        ssize_t n = write(fd, qi.buf+bytes_done, qi.size-bytes_done);
+        ssize_t n = write(fd, qi.buf()+bytes_done, qi.size-bytes_done);
 
         int const _err = errno;
 

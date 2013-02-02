@@ -157,7 +157,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
     sam::SAMProtocol protocol;
     try
     {
-      qi.size = protocol.encodeMsg(msg, qi.buf, qi.capacity());
+      qi.size = protocol.encodeMsg(msg, qi.buf(), qi.capacity());
       m_io->enqueue( qi );
       return false;  // success
     }

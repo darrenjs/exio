@@ -14,9 +14,6 @@ class AppSvc;
 
 struct QueuedItem
 {
-    char   buf[sam::MAX_MSG_LEN];  // TODO: better to use dynamic memory
-//    char   buf[300];  // TODO: better to use dynamic memory
-
     /* number of bytes actually used */
     size_t   size;
 
@@ -28,19 +25,24 @@ struct QueuedItem
     };
    unsigned int flags;
 
-    size_t capacity() const { return sizeof(buf); }
+    size_t capacity() const { return sam::MAX_MSG_LEN; }
+
+    char*       buf()       { return m_buf; }
+    const char* buf() const { return m_buf; }
 
     QueuedItem()
       :  size(0),
          flags(0)
     {}
 
-
     void release()  // better to just use the constructor?
     {
       size  = 0;
       flags = 0;
     }
+
+  private:
+    char   m_buf[sam::MAX_MSG_LEN];  // TODO: better to use dynamic memory
 };
 
 
