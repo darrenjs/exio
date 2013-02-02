@@ -295,8 +295,8 @@ void AdminIO::socket_write()
     {
       exit_reason = Unknown;
 
-      QueuedItem i;
-      wait_and_pop( i );
+      QueuedItem qi;
+      wait_and_pop( qi );
 
       // Note: here we can't be sure of the blocking/non-blocking state of the
       // socket
@@ -309,11 +309,11 @@ void AdminIO::socket_write()
       // write, always test for validity, other we might hit the socket-alias
       // race condition (although, we have not fully elliminated the race
       // condition here).
-      while ( not m_is_stopping and bytes_done < i.size)
+      while ( not m_is_stopping and bytes_done < qi.size)
       {
         int fd = m_fd;
 
-        ssize_t n = write(fd, i.buf+bytes_done, i.size-bytes_done);
+        ssize_t n = write(fd, qi.buf+bytes_done, qi.size-bytes_done);
 
         int const _err = errno;
 
@@ -337,7 +337,7 @@ void AdminIO::socket_write()
         }
       }
 
-      if (i.flags bitand QueuedItem::eThreadKill)
+      if (qi.flags bitand QueuedItem::eThreadKill)
       {
         /* we have been signalled to actively close the connection */
 
@@ -359,7 +359,7 @@ void AdminIO::socket_write()
         if (exit_reason == Unknown) exit_reason = QIKILL;
       }
 
-      i.release();
+      qi.release();
       if (exit_reason == Unknown)  exit_reason = WHILE;
     }
   }

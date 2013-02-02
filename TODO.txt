@@ -5,6 +5,18 @@ TODO for libadmin
 ALL
 ---
 
+* Use smart_ptrs and dynamic memory instead of the current QueuedItem
+  class. The QueuedItem stores its buffer via stack array; advantage is that
+  there is no memory management required, but disadvantage is that lots of
+  memory copying is taking place.  A better approach would be to dynamically
+  allocate some memory just before we encode a Message, and then pass a
+  pointer around, until the raw bytes been writted.  This approach however
+  will require some kind of smart pointer for safest approach, or, I could
+  instead have the Queued Item only deallocate its memory when release() is
+  called.  Also, with QueuedItem, only the last holder of the item really
+  needs to memory; ie., once a copy has been taken, the memory ownership has
+  moved out.
+
 * ximon.gui table events.  A current problem in the ximon gui is that we have
   to hard-code teh table name and column name of xihosts.connection, so that
   when a TCP connection to a server is lost, we can set the connectivity
