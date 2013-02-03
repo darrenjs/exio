@@ -189,7 +189,9 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
   }
   else
   {
-    _INFO_(m_logsvc, "no session found " << id );
+    _WARN_(m_logsvc, "no session found " << id
+           << ", unable to send message: "
+           << msg.type());
   }
 }
 //----------------------------------------------------------------------
@@ -479,13 +481,18 @@ void AdminInterfaceImpl::createNewSession(int fd)
   // valid session, because we don't want the called to think the socket
   // needs to be closed.
 
-  AdminSession* session = new AdminSession(m_appsvc, fd, this);
-  _INFO_(m_appsvc.log(), "Connection from "
-         << session->id().addr()
-         << " sessionid " << session->id());
+  AdminSession* session = NULL;
 
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+    // Note that we create the session, and register it in the
+    // session-registry witin a lock scope.  This is teo prevent the race
+    // condition whereby a message is received from the remote process before
+    // the session ID has been registered; that can result in session ID
+    // lookups failing, meaning that replies to such race-condition messages
+    // go unsent.
+    session = new AdminSession(m_appsvc, fd, this);
 
     // TODO: here I need to check that the ID is unique. If not, I could try
     // creating a new unique ID, or, reject the connection.
@@ -493,8 +500,16 @@ void AdminInterfaceImpl::createNewSession(int fd)
     m_sessions.items[ session->id() ] = session;
   }
 
+  _INFO_(m_appsvc.log(), "Connection from "
+         << session->id().addr()
+         << " sessionid " << session->id());
 
   // Send a logon message to the new connection.
+
+  /* NOTE: the legacy ximon-gui does not send a logon message, which is way we
+   * sent a logon message here.  The admin client will send a logon message as
+   * soon as it establishes a socket connection.
+   */
 
   // TODO: once the ximon is able to send logon kmessages first, then we won't
   // do this until a logon has been received from the remote.
