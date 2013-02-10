@@ -263,14 +263,15 @@ void AdminListener::session_msg_received(const sam::txMessage& msg,
   }
 
   // Does this look like a response to a request?
-  if (msg.root().check_field( exio::id::QN_msgtype, exio::id::msg_response ))
+  if (msg.root().name() == exio::id::msg_response )
   {
     handle_reponse(msg, session);
     return;
   }
 
   // skip some expected message types
-  if (msg.root().name() == exio::id::msg_logon ) // TODO: in above handlers, check the message type using name.() like here, instead of the msgtype field
+  if ((msg.root().name() == exio::id::msg_logon) or
+      (msg.root().name() == exio::id::heartbeat) )
   {
     return;
   }
