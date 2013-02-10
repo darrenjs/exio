@@ -6,6 +6,7 @@
 #include "exio/AdminSession.h"
 #include "exio/AppSvc.h"
 #include "exio/Logger.h"
+#include "exio/utils.h"
 
 #include <sstream>
 #include <set>
@@ -23,7 +24,8 @@ class SnapshotSerialiser
 
     void add_row(DataRow&, const DataTable::MetaForCol* meta = NULL);
 
-    const sam::txMessage& message() { return m_msg;}
+    const sam::txMessage& message() const { return m_msg;}
+          sam::txMessage& message()       { return m_msg;}
 
   private:
     sam::txMessage m_msg;
@@ -96,9 +98,7 @@ void SnapshotSerialiser::add_row(DataRow& datarow,
   }
 
   // update the row count
-  std::ostringstream count;
-  count << nrows+1;
-  body.put_field(id::rows, count.str());
+  body.put_field(id::rows, utils::to_str(nrows+1));
 
 }
 
@@ -120,7 +120,8 @@ DataTable::DataTable(const std::string& table_name,
                      AdminInterfaceImpl * ai)
   : m_table_name( table_name ),
     m_ai( ai ),
-    m_appsvc( &(ai->appsvc()) )
+    m_appsvc( &(ai->appsvc()) ),
+    m_batchsize(100)
 {
 }
 //----------------------------------------------------------------------
@@ -553,9 +554,13 @@ void DataTable::snapshot()
   }
 }
 //----------------------------------------------------------------------
-void DataTable::_nolock_send_snapshopt(const SID& session)
+
+  // HERE
+void DataTable::_nolock_send_snapshopt_as_single_msg(const SID& session)
 {
   /* NOTE: this method assumes the table-lock is held before entry */
+
+  /* NOTE: this is a legacy method */
 
   // TODO: here, should also send the tabledescr and embedded admins too.  See
   // toward top of file, where this is called, that site also dopes publish
@@ -580,6 +585,104 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
   }
   m_ai->send_one(serial.message(), session);
 }
+
+//----------------------------------------------------------------------
+  // HERE
+void DataTable::_nolock_send_snapshopt(const SID& session)
+{
+  /* NOTE: this method assumes the table-lock is held before entry */
+
+  typedef std::vector< DataRow >::iterator Iter;
+
+  int batchsize = m_batchsize;
+  std::list< sam::txMessage > msgs;
+
+  Iter next = m_rows.begin();
+
+  sam::SAMProtocol protocol;
+
+  while (next != m_rows.end())
+  {
+    Iter row = next;
+
+    // start a new batch
+    SnapshotSerialiser serial;
+    serial.set_table_name( m_table_name );
+    for (int i = 0; i < batchsize and row != m_rows.end(); ++i, ++row)
+    {
+      const MetaForCol* meta = NULL;
+      PCMD::const_iterator rowpcmd = m_pcmd.find(row->rowkey());
+      if (rowpcmd != m_pcmd.end()) meta = &(rowpcmd->second);
+      serial.add_row(*row, meta);
+    }
+
+    // check encoding size
+    const static int room_for_snap_fields = 50;
+    if (protocol.check_enc_size(serial.message(), room_for_snap_fields))
+    {
+      // queue this message
+      msgs.push_back( serial.message() );
+      next = row;
+    }
+    else
+    {
+      if (batchsize == 1)
+      {
+        // Hard error.  We have tried a batchsize of 1, but that failed.
+        // Lets add a warning, and abort this snaphot
+
+        throw std::runtime_error("failed to encode snapshot");
+      }
+
+      _WARN_(m_appsvc->log(), "Unable to encode table using a batch size "
+             << batchsize << ". Setting batchsize to 1.");
+
+      batchsize = 1;
+    }
+  }
+
+  std::string snapn = utils::to_str(msgs.size());
+
+  int snapi = 0;
+  for (std::list< sam::txMessage >::iterator i = msgs.begin();
+       i != msgs.end(); ++i)
+  {
+    i->root().put_field(id::QN_head_snapi, utils::to_str(snapi++));
+    i->root().put_field(id::QN_head_snapn, snapn);
+  }
+
+
+  m_ai->send_one(msgs, session);
+
+  m_batchsize = batchsize;
+
+  // // serialise table content
+  // SnapshotSerialiser serial;
+  // serial.set_table_name( m_table_name );
+
+  // for( std::vector< DataRow >::iterator iter=m_rows.begin();
+  //      iter != m_rows.end(); ++iter)
+  // {
+  //   const MetaForCol* meta = NULL;
+
+  //   PCMD::const_iterator rowpcmd = m_pcmd.find(iter->rowkey());
+  //   if (rowpcmd != m_pcmd.end())
+  //   {
+  //     meta = &(rowpcmd->second);
+  //   }
+
+  //   serial.add_row(*iter, meta);
+  // }
+
+  // sam::SAMProtocol protocol;
+  // size_t enclen = protocol.calc_encoded_size( serial.message() );
+
+  // _INFO_(m_appsvc->log(), "enclen " << enclen);
+  // m_ai->send_one(serial.message(), session);
+}
+
+
+
 //======================================================================
 
 DataRow::DataRow(const std::string& rowkey,
@@ -714,7 +817,7 @@ void TableDescrSerialiser::add_column(
   // update the count
   std::ostringstream count;
   count << ncols+1;
-  columns.put_field( id::msgcount, count.str() );
+  columns.put_field( id::msgcount, utils::to_str(ncols+1) );
 
 }
 

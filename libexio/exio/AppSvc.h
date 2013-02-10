@@ -38,22 +38,25 @@ class ConsoleLogger : public LogService
 {
   public:
 
-    enum Levels {eDebug=0x01,
-                 eInfo =0x02,
-                 eWarn =0x04,
-                 eError=0x08,
-                 eAll  =0xFF};
+    enum Levels {eAll = 0,
+                 eDebug,
+                 eInfo,
+                 eWarn,
+                 eError,
+                 eNone = 255};
     int level;
 
-    ConsoleLogger(int l = eInfo|eWarn|eError) : level(l){}
+    ConsoleLogger(int l = eInfo) : level(l){}
 
+    virtual void debug(const std::string&  );
     virtual void info(const std::string&  );
     virtual void warn(const std::string&  );
     virtual void error(const std::string& );
 
-    virtual bool want_info()  { return level bitand eInfo; }
-    virtual bool want_warn()  { return level bitand eWarn; }
-    virtual bool want_error() { return level bitand eError; }
+    virtual bool want_debug() { return level <= eDebug; }
+    virtual bool want_info()  { return level <= eInfo; }
+    virtual bool want_warn()  { return level <= eWarn; }
+    virtual bool want_error() { return level <= eError; }
 };
 
 class AppSvc

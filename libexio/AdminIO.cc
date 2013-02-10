@@ -2,6 +2,7 @@
 #include "exio/AdminInterface.h"
 #include "exio/Logger.h"
 #include "exio/sam.h"
+#include "exio/utils.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -12,9 +13,46 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#define READ_BUF_SIZE 65536
+#define READ_BUF_SIZE sam::MAX_MSG_LEN
 
 namespace exio {
+
+  struct io_error
+  {
+      int  _errno;
+      bool _eof;
+
+      io_error(): _errno(0), _eof(true) {}
+      io_error(int err): _errno(err), _eof(false) {}
+  };
+
+// std::string string_error(int e)
+// {
+//   std::string retval;
+
+//   char errbuf[256];
+//   memset(errbuf, 0, sizeof(errbuf));
+
+// /*
+
+// TODO: here I should be using the proper feature tests for the XSI
+// implementation of strerror_r .  See man page.
+
+//   (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+
+// */
+
+// #ifdef _GNU_SOURCE
+//   return strerror_r(e, errbuf, sizeof(errbuf)-1);
+// #else
+//   // XSI implementation
+//   if (strerror_r(e, errbuf, sizeof(errbuf)-1) == 0)
+
+
+// #endif
+
+//   return "unknown";
+// }
 
 
 //----------------------------------------------------------------------
@@ -28,7 +66,10 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, Listener * l)
      m_threads_complete(0),
      m_have_data( false ),
      m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),
-     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this))
+     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this)),
+     m_log_io_events(false),
+     m_last_write(0),
+     m_total_out(0)
 
 {
 }
@@ -89,13 +130,28 @@ bool read_timeo(int fd, int sec, int usec)
 //----------------------------------------------------------------------
 void AdminIO::socket_read_TEP()
 {
+  bool call_request_stop = true;
   try
   {
     // If read_from_socket returns, it means the write-thread detected the
-    // socket close, and notified the read threead to terminate normally.
+    // socket close, and notified the read thread to terminate normally.
     // However, if the read thread detects the need to close the IO, then it
     // will throw, and so the IO shutdown will be triggered from here.
     read_from_socket();
+    call_request_stop = false;
+  }
+  catch (const io_error& ioerr)
+  {
+    if (not ioerr._eof)
+    {
+      _WARN_(m_appsvc.log(),
+              "socket read failed: "
+             << utils::strerror(ioerr._errno) );
+    }
+  }
+  catch (std::runtime_error& e)
+  {
+    _WARN_(m_appsvc.log(), "socket read failed: " << e.what());
   }
   catch (...)
   {
@@ -103,9 +159,10 @@ void AdminIO::socket_read_TEP()
        have observed that the only exception that gets to here is one that
        arised when the peer has closed the socket. */
 
-    // termiante the write thread
-    request_stop();
   }
+
+  // termiante the write thread
+  if (call_request_stop)  request_stop();
 
   m_threads_complete.incr();
 }
@@ -120,7 +177,7 @@ void AdminIO::read_from_socket()
   sam::txMessage msg;
 
   // number of bytes in buf[] waiting to be processed
-  int bytesavail = 0;
+  size_t bytesavail = 0;
 
   while (true)
 
@@ -134,20 +191,33 @@ void AdminIO::read_from_socket()
     if ( m_is_stopping ) return;
 
     if (bytesavail == READ_BUF_SIZE)
+    {
+      //_INFO_(m_appsvc.log(), "bytesavail  " << bytesavail << " - buffer full");
       throw std::runtime_error("input buffer full");
+    }
 
     char* wp = buf + bytesavail; // write pointer
     ssize_t n = read( m_fd, wp, (READ_BUF_SIZE - bytesavail) );
-//    _INFO_("bytes read: " << n << " #" << m_fd);
+    int const _err = errno;
+
+    if (m_log_io_events)
+    {
+      std::ostringstream os;
+      os << "read() " << n
+         << ", errno " << _err
+         << " (" << utils::strerror(_err) << ")";
+      _INFO_(m_appsvc.log(), os.str());
+    }
+
     if ( m_is_stopping ) return;
 
     if (n == 0)
     {
-      throw std::runtime_error("read closed");
+      throw io_error(); // empty imples eof
     }
-    else if (n < 0 )
+    else if (n < 0)
     {
-      throw std::runtime_error("socket error");
+      throw io_error( _err );
     }
 
     bytesavail += n; // increase count of waiting bytes
@@ -185,8 +255,21 @@ void AdminIO::read_from_socket()
 
       if (consumed > 0)
       {
-        if (m_listener) m_listener->io_onmsg( msg );
+        if (m_listener)
+        {
+          try {
+            m_listener->io_onmsg( msg );
+          }
+          catch (...)
+          {
+            /* ignore exception thrown by client
 
+            this was added (10/02/13) when I observed exceptions being thrown
+            during the processes of encoding a response, were finding their
+            way up to here.
+            */
+          }
+        }
         // consume the data from our buffer
         rp         += consumed;
         bytesavail -= consumed;
@@ -313,9 +396,26 @@ void AdminIO::socket_write()
       {
         int fd = m_fd;
 
-        ssize_t n = write(fd, qi.buf()+bytes_done, qi.size-bytes_done);
 
+        /* Note: now using send() instead of write(), so that we can prevent
+         * SIGPIPE from being raised */
+        const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
+        char* buf       = qi.buf()+bytes_done;
+        size_t len      = qi.size-bytes_done;
+
+        ssize_t n = send(fd, buf, len, flags);
+//        ssize_t n = write(fd, qi.buf()+bytes_done, qi.size-bytes_done);
         int const _err = errno;
+
+        if (m_log_io_events)
+        {
+          std::ostringstream os;
+          os << "send() " << n
+             << ", errno " << _err
+             << " (" << utils::strerror(_err) << ")";
+          _INFO_(m_appsvc.log(), os.str());
+        }
+
 
         if (n == -1)
         {
@@ -327,13 +427,16 @@ void AdminIO::socket_write()
           else
           {
             exit_reason = WRITE_ERR;
-            _INFO_(m_appsvc.log(), "sock write error, err=" << _err << ", fd=" << fd);
+            _WARN_(m_appsvc.log(),
+                   "socket write failed: " << utils::strerror(_err) );
             m_is_stopping = true;
           }
         }
         else
         {
           bytes_done += n;
+          m_last_write = time(NULL);
+          m_total_out += n;
         }
       }
 

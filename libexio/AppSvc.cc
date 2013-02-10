@@ -12,6 +12,8 @@ AppSvc::AppSvc(Config config,
 {
 }
 
+void ConsoleLogger::debug(const std::string&  s)
+{ std::cout << "debug: " << s << "\n"; }
 void ConsoleLogger::info(const std::string&  s)
 { std::cout << "info: " << s << "\n"; }
 void ConsoleLogger::error(const std::string& s)

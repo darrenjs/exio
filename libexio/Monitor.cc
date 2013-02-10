@@ -51,7 +51,16 @@ void Monitor::subscribe_all(const SID& __id)
   {
     DataTable* table = it->second;
 
-    table->add_subscriber( __id );
+    try
+    {
+      table->add_subscriber( __id );
+    }
+    catch (std::exception& e)
+    {
+      _WARN_(m_ai->appsvc().log(),
+             "problem when adding session " << __id
+             << " to table " << table->table_name() << ": " << e.what());
+    }
   }
 }
 //----------------------------------------------------------------------

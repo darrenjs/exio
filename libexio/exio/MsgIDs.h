@@ -47,11 +47,12 @@ namespace id  /* identifiers */
   static const std::string text           = "text";
   static const std::string user           = "user";
   static const std::string value          = "value";
+  static const std::string snapi          = "snapi";
+  static const std::string snapn          = "snapn";
 
   // true/false representation
   static const std::string True   = "1";
   static const std::string False  = "0";
-
 
   // qualified-name id for fields
   static const sam::qname QN_rescode        = QNAME( head, rescode );
@@ -67,6 +68,8 @@ namespace id  /* identifiers */
   static const sam::qname QN_serviceid      = QNAME( head, serviceid );
   static const sam::qname QN_noautosub      = QNAME( head, noautosub );
   static const sam::qname QN_head_reqseqno  = QNAME( head, reqseqno );
+  static const sam::qname QN_head_snapi     = QNAME( head, snapi );
+  static const sam::qname QN_head_snapn     = QNAME( head, snapn );
 
   // message types
   static const std::string admindescr   = "admindescr";
@@ -78,6 +81,7 @@ namespace id  /* identifiers */
   static const std::string tableclear   = "tableclear";
   static const std::string tabledescr   = "tabledescr";
   static const std::string tableupdate  = "tableupdate";
+  static const std::string heartbeat    = "heartbeat";
 
   // error codes
   static int const err_unknown = 1;

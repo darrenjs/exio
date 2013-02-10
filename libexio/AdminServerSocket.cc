@@ -2,6 +2,7 @@
 #include "exio/AdminInterfaceImpl.h"
 #include "exio/Logger.h"
 #include "exio/AppSvc.h"
+#include "exio/utils.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +16,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+// WARNING: before changing this value, consider that the housekeeping time
+// interval & thread might be used somewhere within exio for other
+// purposes. E.g., the thread could be driving heartbeating etc.
 #define ACCEPT_TIMEOUT_SECS 10
 
 
@@ -130,12 +134,7 @@ int Accept(int sockfd,
         {
           int lasterrno = errno;
           std::ostringstream err;
-          err << "accept error. errno=" << lasterrno
-              << ", strerr=" << strerror(lasterrno)   // don't usr strerr
-              << " " << _HERE_;
-
-          // TODO: throwning if fine ... providing caller will catch and
-          // recall this routine.
+          err << "accept error: " << exio::utils::strerror(lasterrno);
           throw std::runtime_error( err.str() );
         }
         continue_to_poll = false;
@@ -256,6 +255,22 @@ void AdminServerSocket::accept_TEP()
       bool session_created_ok = false;
       try
       {
+
+#ifdef SO_KEEPALIVE
+        /* Set keepalives on the socket to detect dropped connections. */
+        {
+          int keepalive = 1;
+          if (setsockopt (connfd, SOL_SOCKET, SO_KEEPALIVE,
+                          (char *) &keepalive, sizeof (keepalive)) < 0)
+          {
+            int __errno = errno;
+            _WARN_(m_aii->appsvc().log(),"setsockopt (SO_KEEPALIVE): "
+                   << utils::strerror(__errno));
+          }
+        }
+#endif
+
+
         phase = "failed to create new session; ";
 //        _INFO_("Connection accepted, connfd=" << connfd);
         m_aii->createNewSession( connfd );
@@ -284,7 +299,7 @@ void AdminServerSocket::accept_TEP()
     // ensures that housekeeping will always get called, even during period of
     // high frequency socket accepts.
 
-    if ( ( (::time(NULL) - last_house_keep) > ACCEPT_TIMEOUT_SECS) or
+    if ( ( (::time(NULL) - last_house_keep) >= ACCEPT_TIMEOUT_SECS) or
          (conn_count - conncount_on_last_house > 10)
       )
     {

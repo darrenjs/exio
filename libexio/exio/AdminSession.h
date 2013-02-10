@@ -65,6 +65,8 @@ class AdminSession : public AdminIO::Listener
     virtual void io_onmsg(const sam::txMessage& src) ;
     virtual void io_closed();
 
+    void housekeeping();
+
   private:
 
     void notify_of_close();
@@ -84,6 +86,11 @@ class AdminSession : public AdminIO::Listener
     AdminIO * m_io;
 
     bool m_autoclose;
+
+    /* Interval, in secs, at which to send heartbeats. Values below 30 seconds
+     * might not be too reliable, because the underlying housekeeping timer
+     * has around a 20 second precision. */
+    int m_hb_intvl;
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);

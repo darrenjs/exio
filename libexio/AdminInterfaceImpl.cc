@@ -195,6 +195,44 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
   }
 }
 //----------------------------------------------------------------------
+void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
+                                  const SID& id)
+{
+  cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+  std::map<SID, AdminSession*>::iterator iter
+    = m_sessions.items.find(id);
+
+  if (iter != m_sessions.items.end())
+  {
+    AdminSession * session = iter->second;
+
+    // Note: it is better to perform the session enqueue inside the lock so
+    // that we avoid the race condition where a session is being removed
+    // (and deleted) and we are trying to use the pointer to it! So as long
+    // as we are holding the sessions lock, the session pointer will be
+    // valid.
+
+    // TODO: regarding comment above, make a note about this, because this is
+    // a pattern that I have considered before, ie, to reduce the lock scope,
+    // I have taken a copy of the protected data, and operated on the data
+    // outside of the lock.  Sometimes it can be unsafe to do that.
+    if ( session->is_open() )
+    {
+      for (std::list<sam::txMessage>::const_iterator it = msgs.begin();
+           it != msgs.end(); ++it)
+        session->enqueueToSend( *it);
+    }
+  }
+  else
+  {
+    _WARN_(m_logsvc, "no session found " << id
+           << ", unable to send messages");
+  }
+
+}
+
+//----------------------------------------------------------------------
 void AdminInterfaceImpl::send_all(const sam::txMessage& msg)
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
@@ -462,6 +500,18 @@ AdminCommand* AdminInterfaceImpl::admin_find(const std::string& name)
 void AdminInterfaceImpl::housekeeping()
 {
   session_cleanup();
+
+  // Now heartbeat on each session
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+    for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
+         it != m_sessions.items.end(); ++it)
+    {
+      if (it->second->is_open()) it->second->housekeeping();
+
+    }
+  }
 }
 
 //----------------------------------------------------------------------

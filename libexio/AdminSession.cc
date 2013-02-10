@@ -10,8 +10,7 @@
 #include <sys/time.h>
 #include <strings.h>
 #include <string.h>
-
-#define READ_BUF_SIZE 65536
+#include <stdlib.h>
 
 namespace exio {
 
@@ -118,7 +117,8 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_session_valid(true),
     m_listener( l ),  // need store listener before IO started
     m_io( new AdminIO(m_appsvc, fd, this )),
-    m_autoclose(false)
+    m_autoclose(false),
+    m_hb_intvl(60)
 {
 }
 //----------------------------------------------------------------------
@@ -267,7 +267,21 @@ bool AdminSession::safe_to_delete() const
 }
 
 //----------------------------------------------------------------------
+void AdminSession::housekeeping()
+{
+  if ((!m_io) or (m_hb_intvl==0)) return;
 
+  time_t lastactivity = m_io->last_write();
+  time_t now = time(NULL);
+
+  // note, 'm_last_send' is more or less 'current time'
+  if (abs(now - lastactivity) >= m_hb_intvl)
+  {
+    enqueueToSend( sam::txMessage(id::heartbeat) );
+  }
+}
+
+//----------------------------------------------------------------------
 
 
 } // namespace qm

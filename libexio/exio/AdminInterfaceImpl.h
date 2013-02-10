@@ -49,6 +49,8 @@ class AdminInterfaceImpl : public AdminSession::Listener
     /* ----- Messaging ----- */
     void send_one(const sam::txMessage&,
                   const SID&);
+    void send_one(const std::list<sam::txMessage>&,
+                  const SID&);
     void send_all(const sam::txMessage& msg);
 
 

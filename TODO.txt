@@ -1,9 +1,65 @@
 TODO for libadmin
 =================
 
+
+Work: new approach to snapshots
+
+- raw table is converted into a txMessage type structure
+- AI::send_one
+  -> enqueueToSend
+  ->  protocol.encodeMsg
+
+
+
 ----------------------------------------------------------------------
 ALL
 ---
+
+* in send_one(LIST), we loop ver each message and call the enque for each.
+  Instead, have a mthod on the IO that takes a list, this is to avoid
+  interleaving of snapshots etc.
+
+* rmeove old _nolock_send_snapshopt_as_single_msg
+
+* preer to use check_enc_size, because of the margin etc.  ie remove uses of
+  the other function, which calcs msg size.
+
+* [MEDIUM/HIGH] - have noticed that even when the regsim has gone down, ximond
+  is still sending regular updates, eg, below.  Need to investigate why these
+  are being sent, and then resolve.
+
+{SAM0100:00029:heartbeat:[]}
+{SAM0100:00161:tableupdate:[head=[tablename=xi.hosts,msgtype=tableupdate,],body=[rows=1,row_0=[RowKey=xi.uat.zurichH,RowLastUpdated=2013/02/10 16\:58\:39,],],]}
+{SAM0100:00161:tableupdate:[head=[tablename=xi.hosts,msgtype=tableupdate,],body=[rows=1,row_0=[RowKey=xi.uat.zurichH,RowLastUpdated=2013/02/10 16\:56\:06,],],]}
+{SAM0100:00161:tableupdate:[head=[tablename=xi.hosts,msgtype=tableupdate,],body=[rows=1,row_0=[RowKey=xi.uat.zurichH,RowLastUpdated=2013/02/10 16\:58\:44,],],]}
+{SAM0100:00161:tableupdate:[head=[tablename=xi.hosts,msgtype=tableupdate,],body=[rows=1,row_0=[RowKey=xi.uat.zurichH,RowLastUpdated=2013/02/10 16\:56\:06,],],]}
+{SAM0100:00029:heartbeat:[]}
+
+
+* [HARD] "Big Message Problem" - this is the problem where a single txMessage
+  is too large to be encoded.  Eg. it could be something as simple as a filed
+  name being very very long.  Or maybe there are cases where the protocol
+  window is smaller.  Whatever.  The problme remains that we have a txMessage
+  whic, as currently implemented, cannot be serialised into a SAM message.  So
+  the solution has to be message fragmenting.  This requires support on both
+  sender and receiver (which also means the Java GUI needs updating).  So next
+  thing is to sit down and design this out.
+
+* [HARD] for estimation of size, we need to consider cases where a single row,
+  or even part of a row, like the fielname or field value, might already
+  exceed the max msg size.  Just adding up the parts is not enought, because
+  the counter could wrap around.  So need to review the calc-message-size
+  routine.  This should be esay to test though, by reducing the buffer size.
+
+* [HARD] another approach to encoding large messages is to send a fully
+  encoded message in chunks, which must be reassemlbed at the receiver site.
+
+* [EASY] Allow use of keepalive to be configured
+
+* [DONE] move the string_error function into a common location, and use
+  whereever strerror is currently called.
+
+* [HOURS] - add heatbeating.
 
 * Use smart_ptrs and dynamic memory instead of the current QueuedItem
   class. The QueuedItem stores its buffer via stack array; advantage is that

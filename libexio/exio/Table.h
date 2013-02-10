@@ -135,7 +135,9 @@ class DataTable
 
     void add_columns(const std::list<std::string>& cols);
 
+    /* Can throw */
     void add_subscriber(const SID& session);
+
     void del_subscriber(const SID& session);
 
     /* Get the sessions subscribed to this table */
@@ -158,6 +160,7 @@ class DataTable
     void _nolock_publish_update(std::list<TableEventPtr>&);
 
     void _nolock_send_snapshopt(const SID&);
+    void _nolock_send_snapshopt_as_single_msg(const SID&);
 
     void add_column_NOLOCK(const std::string & column,
                            std::list<TableEventPtr>& events);
@@ -193,8 +196,10 @@ class DataTable
   public:
     typedef std::map< std::string, sam::txContainer  > MetaForCol;
     typedef std::map< std::string, MetaForCol  > PCMD; // per-cell-meta-data
+
   private:
     PCMD m_pcmd;  // map of rowkey to col-to-meta
+    int m_batchsize;
 };
 
 

@@ -3,6 +3,7 @@
 #include "exio/AppSvc.h"
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
+#include "exio/Logger.h"
 
 #include "condition_variable.h"
 #include "mutex.h"
@@ -535,20 +536,49 @@ int main(const int argc, char** argv)
 
     if (!addr or !port) die("please specify address and port");
 
-
-    /* Create a socket and connect */
-
-    int s = connect_ipv4(addr, port);
-    if (!s) return 1;
-
     // define application services required by exio objects
     exio::Config config;
 
     // TODO: allow the error level to be specified by config
     exio::ConsoleLogger logger(exio::ConsoleLogger::eInfo);
-
+    exio::ConsoleLogger* logptr = &logger;
 
     exio::AppSvc appsvc( config, &logger);
+
+    /* Create a socket and connect */
+
+    int fd = connect_ipv4(addr, port);
+    if (!fd) return 1;
+
+#if defined (IP_TOS) && defined (IPTOS_LOWDELAY) && defined (IPPROTO_IP)
+    /* To  minimize delays for interactive traffic.  */
+    {
+      int tos = IPTOS_LOWDELAY;
+      if (setsockopt (fd, IPPROTO_IP, IP_TOS,
+                      (char *) &tos, sizeof (int)) < 0)
+      {
+        int __errno = errno;
+        _WARN_(logptr, "setsockopt (IP_TOS): "
+               << __errno); // TODO: add strerr
+      }
+    }
+#endif
+
+#ifdef SO_KEEPALIVE
+        /* Set keepalives on the socket to detect dropped connections. */
+        {
+          int keepalive = 1;
+          if (setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE,
+                          (char *) &keepalive, sizeof (keepalive)) < 0)
+          {
+            int __errno = errno;
+            _WARN_(logptr, "setsockopt (SO_KEEPALIVE): "
+                   << __errno); // TODO: add strerr
+          }
+        }
+#endif
+
+
 
 
     // TODO: build up an admin service ID
@@ -557,7 +587,7 @@ int main(const int argc, char** argv)
 
     if (cmd.empty()) listener.show_unsol_messages(true);
 
-    exio::AdminSession adminsession(appsvc, s, &listener);
+    exio::AdminSession adminsession(appsvc, fd, &listener);
 
     // Generate a logon message
 

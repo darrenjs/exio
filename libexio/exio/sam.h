@@ -466,7 +466,11 @@ class SAMProtocol
                      char* const dest,
                      size_t len);
 
-    size_t encodeMsg_calc(const txMessage& msg);
+    size_t calc_encoded_size(const txMessage& msg);
+
+    /* return true if message can encode, else false */
+    bool check_enc_size(const txMessage& msg,
+                           size_t margin);
 
     /* Minimum raw bytes needed to determine message length */
     size_t head_len() const { return 14; } // {SAM0100:00000

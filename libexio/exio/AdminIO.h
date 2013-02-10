@@ -136,6 +136,8 @@ class AdminIO
 
     bool safe_to_delete() const;
 
+    time_t last_write() const { return m_last_write; }
+
   private:
     AdminIO(const AdminIO&); // no copy
     AdminIO& operator=(const AdminIO&); // no assignment
@@ -173,6 +175,12 @@ class AdminIO
     enum { NumberInternalThreads = 2 };
     cpp11::thread * m_read_thread;
     cpp11::thread * m_write_thread;
+
+    bool m_log_io_events; // for debugging
+
+    // IO stats
+    time_t m_last_write;
+    size_t m_total_out;
 };
 
 } // namespace qm

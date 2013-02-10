@@ -120,7 +120,7 @@ qname qname::parse(const char * src)
   /* Note. Prefer the const char approach so that a NULL pointer is passed
    * straight through to the tokenize, where it handled, instead of an
    * implicit conversion to an std::string which throws exception. */
-  return qname( sam::tokenize(src, '.', false) );
+  return qname( exio::utils::tokenize(src, '.', false) );
 }
 
 //======================================================================
@@ -292,7 +292,7 @@ size_t SAMProtocol::encodeMsg(const txMessage& msg,
 }
 
 //----------------------------------------------------------------------
-size_t SAMProtocol::encodeMsg_calc(const txMessage& msg)
+size_t SAMProtocol::calc_encoded_size(const txMessage& msg)
 {
   size_t n = 0;
 
@@ -316,6 +316,13 @@ size_t SAMProtocol::encodeMsg_calc(const txMessage& msg)
   n++;
 
   return n;
+}
+//----------------------------------------------------------------------
+bool SAMProtocol::check_enc_size(const txMessage& msg, size_t margin)
+{
+  size_t encsz = calc_encoded_size(msg);
+
+  return (encsz + margin <= MAX_MSG_LEN);
 }
 //----------------------------------------------------------------------
 bool SAMProtocol::isSpecialChar(char c)
