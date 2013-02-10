@@ -15,13 +15,13 @@ Work: new approach to snapshots
 ALL
 ---
 
-* in send_one(LIST), we loop ver each message and call the enque for each.
+* [EASY] in send_one(LIST), we loop ver each message and call the enque for each.
   Instead, have a mthod on the IO that takes a list, this is to avoid
   interleaving of snapshots etc.
 
-* rmeove old _nolock_send_snapshopt_as_single_msg
+* [EASY] rmeove old _nolock_send_snapshopt_as_single_msg
 
-* preer to use check_enc_size, because of the margin etc.  ie remove uses of
+* prefer to use check_enc_size, because of the margin etc.  ie remove uses of
   the other function, which calcs msg size.
 
 * [MEDIUM/HIGH] - have noticed that even when the regsim has gone down, ximond
@@ -54,7 +54,7 @@ ALL
 * [HARD] another approach to encoding large messages is to send a fully
   encoded message in chunks, which must be reassemlbed at the receiver site.
 
-* [EASY] Allow use of keepalive to be configured
+* [DONE] Allow use of keepalive to be configured
 
 * [DONE] move the string_error function into a common location, and use
   whereever strerror is currently called.

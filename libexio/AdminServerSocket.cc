@@ -35,14 +35,13 @@ int SocketIPv4()
   int protocol = 0;
 
   int fd = socket(socket_family, socket_type, protocol);
+  int __errno = errno;
 
   if (fd < 0)
   {
     std::ostringstream err;
-    err << "socket error. retval=" << fd << ", strerror=" << strerror(fd)<<" ";
-    err << _HERE_;
-
-    throw std::runtime_error (err.str());
+    err << "socket() failed: " << exio::utils::strerror(__errno);
+    throw std::runtime_error(err.str());
   }
 
   return fd;
@@ -55,12 +54,11 @@ int Bind(int sockfd,
 {
   if (bind(sockfd, addr, addrlen) < 0)
   {
-    int lasterrno = errno;
+    int __errno = errno;
+
     std::ostringstream err;
-    err << "bind error. errno=" << lasterrno
-        << ", strerr=" << strerror(lasterrno)
-        << " " << _HERE_;
-    throw std::runtime_error( err.str() );
+    err << "bind() failed: " << exio::utils::strerror(__errno);
+    throw std::runtime_error(err.str());
   }
 
   return 0;
@@ -71,12 +69,9 @@ void Listen(int sockfd, int backlog)
 {
   if (listen(sockfd, backlog) < 0)
   {
-    int lasterrno = errno;
+    int __errno = errno;
     std::ostringstream err;
-    err << "listen error. errno=" << lasterrno
-        << ", strerr=" << strerror(lasterrno)
-        << " " << _HERE_;
-
+    err << "listen() failed: " << exio::utils::strerror(__errno);
     throw std::runtime_error( err.str() );
   }
 }
@@ -153,13 +148,10 @@ int Accept(int sockfd,
     {
       /* error condition */
       int _errno = errno;
-      char errstr[256]; memset(&errstr, 0, sizeof(errstr));
-      strerror_r( _errno, errstr, sizeof(errstr)-1);
 
       std::ostringstream os;
-      os << "poll failed, " << _errno << ", " << errstr;
-      os << "\n";
-      _INFO_(logsvc, os.str() );
+      os << "poll() failed: " << exio::utils::strerror(_errno);
+      _WARN_(logsvc, os.str() );
       throw std::runtime_error( os.str() );
     }
 
@@ -265,7 +257,7 @@ void AdminServerSocket::accept_TEP()
           {
             int __errno = errno;
             _WARN_(m_aii->appsvc().log(),"setsockopt (SO_KEEPALIVE): "
-                   << utils::strerror(__errno));
+                   << exio::utils::strerror(__errno));
           }
         }
 #endif
