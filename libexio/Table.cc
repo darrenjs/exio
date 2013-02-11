@@ -10,7 +10,9 @@
 
 #include <sstream>
 #include <set>
-
+#include <sys/time.h>
+#include <string.h>
+#include <stdio.h>
 
 namespace exio
 {
@@ -742,6 +744,27 @@ bool DataRow::update_fields(const std::map<std::string, std::string>& fields,
       eventptr->fields[ up->first ] = up->second;
       rowupdated = true;
     }
+  }
+
+  if (rowupdated)
+  {
+    time_t now = time(NULL);
+    tm parts;
+    localtime_r(&now, &parts);
+    char timeStr[50];
+    memset(timeStr, 0, sizeof(timeStr));
+    snprintf(timeStr,
+             sizeof(timeStr),
+             "%d/%02d/%02d %02d:%02d:%02d",
+             parts.tm_year + 1900,
+             parts.tm_mon + 1,
+             parts.tm_mday,
+             parts.tm_hour,parts.tm_min,parts.tm_sec);
+    timeStr[sizeof(timeStr)-1] = '\0';
+    std::string timestring = timeStr;
+
+    m_fields[ id::row_last ] = timestring;
+    eventptr->fields[ id::row_last ] = timestring;
   }
 
   if (eventptr) events.push_back( eventptr );

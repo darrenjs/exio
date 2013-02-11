@@ -34,6 +34,7 @@ namespace id  /* identifiers */
   static const std::string resptype       = "resptype";
   static const std::string restext        = "restext";
   static const std::string row_key        = "RowKey";
+  static const std::string row_last       = "RowLastUpdated";
   static const std::string row_prefix     = "row_";
   static const std::string rows           = "rows";
   static const std::string scalarlist     = "scalarlist";

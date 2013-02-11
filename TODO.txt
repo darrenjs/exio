@@ -15,6 +15,12 @@ Work: new approach to snapshots
 ALL
 ---
 
+* [EASY] Allow it to be configured whether the RowLastUpdated is automatically
+         added or not.
+
+* [EASY] Allow heartbeats, on a per session basis, to be option. Can have a
+  field in the logon message.
+
 * [EASY] in send_one(LIST), we loop ver each message and call the enque for each.
   Instead, have a mthod on the IO that takes a list, this is to avoid
   interleaving of snapshots etc.
@@ -59,7 +65,7 @@ ALL
 * [DONE] move the string_error function into a common location, and use
   whereever strerror is currently called.
 
-* [HOURS] - add heatbeating.
+* [DONE] - add heatbeating.
 
 * Use smart_ptrs and dynamic memory instead of the current QueuedItem
   class. The QueuedItem stores its buffer via stack array; advantage is that
@@ -88,7 +94,7 @@ ALL
   specify various presentation styles for their columns, and they styles need
   to be supported by the GUI.  The GUI should not do anything, by default.
 
-* exio.  How can we reduce the number of threads?  Can we have 1 thread per
+* [VHARD] exio.  How can we reduce the number of threads?  Can we have 1 thread per
   session, instead of two?  Can we have 1 thread to handle all sessions?
 
 * ximon.gui -- is the GUI currently sending logon messages?
@@ -98,14 +104,14 @@ ALL
 
 * exio & clients: should we group admin commands into categories?
 
-* exio : change the session ID so that it can wrap-around.  The current one
-  cannot.  Use something like a pending array with a wrap around mask.  This
-  means we will only be able to support a fixed number of simulataneous
+* [HARD] exio : change the session ID so that it can wrap-around.  The current
+  one cannot.  Use something like a pending array with a wrap around mask.
+  This means we will only be able to support a fixed number of simulataneous
   clients, which is fine for now.
 
-* exio router. Would be nice to have a generic router, which connects to other
-  exio services, and then unifies them, so that clients which cannot reach
-  colo hosts instead can use the exio router (exiord). Need a design.
+* [HARD] exio router. Would be nice to have a generic router, which connects
+  to other exio services, and then unifies them, so that clients which cannot
+  reach colo hosts instead can use the exio router (exiord). Need a design.
 
 * ximon.gui.  The "Delete All Rows" option is misleading, because it deletes
   all rows in table XYZ, now just the visible row.  So consider renaming this
@@ -126,9 +132,6 @@ ALL
 
 * ximon.gui & exio.  If the user clicks on delete row, should the gui send a
   message to all connected sessions, requesting a snapshot?
-
-* introduce heartbeats from exio to all connected sessions. Make them
-  optional.
 
 * exio hardening: make core classes (eg SAM structures etc) exception and
   thread safe in the copy constructors and assignment operators.
@@ -166,7 +169,7 @@ ALL
   header files are being exported, because after recent refactoring, some of
   them may no longer be needed.
 
-* Remove the table_clear from Admin commands.
+* [DONE] Remove the table_clear from Admin commands.
 
 * move the thread_queue inside of the QueueWriter, and add internal locking
   there.  Also, inside the locking scope, include the isStopping flag, and
