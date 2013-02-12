@@ -169,6 +169,7 @@ void SAMProtocol::write_str(char* & dest,
         ++dest;
       }
 
+      check_space(dest, end, 1);
       *dest++ = *src++;
     }
   }
@@ -196,7 +197,8 @@ void SAMProtocol::write_str_calc(const std::string str, size_t & n)
   }
   else
   {
-    n += accept;
+    n   += accept;  // simulate the write
+    src += accept;
 
     // now write out the region containing special chars, which has to be done
     // character by character
@@ -204,10 +206,9 @@ void SAMProtocol::write_str_calc(const std::string str, size_t & n)
     {
       if ( SAMProtocol::isSpecialChar(*src) )
       {
-        n++;
+        ++n;
       }
-
-      n++;
+      n++; src++;
     }
   }
 }
@@ -313,7 +314,7 @@ size_t SAMProtocol::calc_encoded_size(const txMessage& msg)
   SAMProtocol::write_noescape_calc(MSG_END, n);
   SAMProtocol::write_noescape_calc(MSG_DELIM , n);
 
-  n++;
+  //n++;
 
   return n;
 }

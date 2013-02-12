@@ -158,14 +158,23 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
     try
     {
       qi.size = protocol.encodeMsg(msg, qi.buf(), qi.capacity());
+
+      /*
+      size_t sz = protocol.calc_encoded_size(msg);
+      _INFO_(m_appsvc.log(), "estimated " << sz << ", actual " << qi.size);
+      */
+
       m_io->enqueue( qi );
       return false;  // success
     }
     catch (sam::OverFlow& err)
     {
+      // If we arrive here, the message could not be encoded.
+      size_t sz = protocol.calc_encoded_size(msg);
       _ERROR_(m_appsvc.log(), "Failed to send "
               << msg.type() <<  " message due to encode exception: "
-              << err.what());
+              << err.what()
+              << " (expected size was " << sz << ")");
 
       // // TODO experimental
       // size_t n = protocol.calcEncodeSize(msg);

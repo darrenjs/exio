@@ -123,7 +123,7 @@ DataTable::DataTable(const std::string& table_name,
   : m_table_name( table_name ),
     m_ai( ai ),
     m_appsvc( &(ai->appsvc()) ),
-    m_batchsize(100)
+    m_batchsize(500)
 {
 }
 //----------------------------------------------------------------------
@@ -625,6 +625,7 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
       // queue this message
       msgs.push_back( serial.message() );
       next = row;
+      //_INFO_(m_appsvc->log(), "Success with batchsize " << batchsize);
     }
     else
     {
@@ -636,10 +637,11 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
         throw std::runtime_error("failed to encode snapshot");
       }
 
-      _WARN_(m_appsvc->log(), "Unable to encode table using a batch size "
-             << batchsize << ". Setting batchsize to 1.");
-
-      batchsize = 1;
+      int const origbatchsize = batchsize;
+      batchsize = std::max(1, batchsize/2);
+      _INFO_(m_appsvc->log(), "Unable to encode table snapshot using"
+             << " batch-size " << origbatchsize << ". Reducing to "
+             << batchsize << ".");
     }
   }
 
@@ -653,7 +655,7 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
     i->root().put_field(id::QN_head_snapn, snapn);
   }
 
-
+  // TODO: do I need to catch exceptions thrown from send_one
   m_ai->send_one(msgs, session);
 
   m_batchsize = batchsize;
