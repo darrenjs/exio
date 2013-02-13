@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdio.h>
 
 #define MIN_SECS   (60)
 #define HOUR_SECS  (60 * 60)
@@ -651,13 +652,10 @@ AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
   os << "uptime: " << uptime.str() << "\n";
   os << "pid: " << getpid() << "\n";
 
-
-
-  // username
-  char username[256];
+  // username - use cuserid because that is user ID of the process
+  char username[L_cuserid];
   memset(username, 0, sizeof(username));
-  if (getlogin_r(username, sizeof(username)) != 0)
-    strcpy(username, "unknown");
+  cuserid(username);
   username[sizeof(username)-1] = '\0';
   os << "user: " << username << "\n";
 
