@@ -116,10 +116,8 @@ int Accept(int sockfd,
     //     short revents;    /* returned events */
     // };
 
-
-//    _INFO_("polling");
     int n = poll(fds_array, nfds, timeout); // will block
-//    _P_( n );
+
     if (n)
     {
       // a positive 'n' is number of structures with nonzero revents fields
@@ -128,9 +126,7 @@ int Accept(int sockfd,
         if ( (fd = accept(sockfd, addr, addrlen)) < 0)
         {
           int lasterrno = errno;
-          std::ostringstream err;
-          err << "accept error: " << exio::utils::strerror(lasterrno);
-          throw std::runtime_error( err.str() );
+          throw std::runtime_error( exio::utils::strerror(lasterrno) );
         }
         continue_to_poll = false;
       }
@@ -199,7 +195,6 @@ void AdminServerSocket::create_listen_socket()
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
-  const char * phase;
   _INFO_(m_aii->appsvc().log(), "Server socket thread starting" );
   _INFO_(m_aii->appsvc().log(),
          "listening on port " << m_aii->appsvc().conf().server_port);
@@ -213,30 +208,29 @@ void AdminServerSocket::accept_TEP()
   // TODO: need a way to singal this loop to stop.
   while (true)
   {
-    socklen_t clilen;    // TODO: what is this for?
-    sockaddr_in cliaddr; // TODO: what is this for?
-
+    sockaddr_in clientaddr;
+    socklen_t addrlen = sizeof(clientaddr);
+    memset(&clientaddr, 0, sizeof(clientaddr));
 
     int connfd = -1;
 
     /* attempt to accept a new connection */
     try
     {
-      phase = "failed to accept socket connection; ";
-
-      connfd = Accept(m_servfd, (struct sockaddr*) &cliaddr, &clilen,
+      connfd = Accept(m_servfd, (struct sockaddr*) &clientaddr, &addrlen,
                       m_aii->appsvc().log());
       conn_count++;
     }
     catch (const std::exception& e)
     {
-      _ERROR_(m_aii->appsvc().log(),  phase << e.what() );
+      _ERROR_(m_aii->appsvc().log(),
+              "accept() failed: " << e.what() );
     }
     catch (...)
     {
-      _ERROR_(m_aii->appsvc().log(),  phase << "unknown exception" );
+      _ERROR_(m_aii->appsvc().log(),
+              "accept() failed: unknown exception" );
     }
-
 
     if ( connfd < 0)
     {
@@ -262,19 +256,18 @@ void AdminServerSocket::accept_TEP()
         }
 #endif
 
-
-        phase = "failed to create new session; ";
-//        _INFO_("Connection accepted, connfd=" << connfd);
         m_aii->createNewSession( connfd );
         session_created_ok = true;
       }
       catch (const std::exception& e)
       {
-        _ERROR_(m_aii->appsvc().log(), phase << e.what() );
+        _ERROR_(m_aii->appsvc().log(),
+                "createNewSession() failed: " << e.what() );
       }
       catch (...)
       {
-        _ERROR_(m_aii->appsvc().log(), phase << "unknown exception" );
+        _ERROR_(m_aii->appsvc().log(),
+                "createNewSession() failed: unknown exception" );
       }
 
       if (!session_created_ok)
