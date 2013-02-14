@@ -105,6 +105,9 @@ class AdminRequest
     typedef std::vector< std::string > Args;
     const Args& args() const { return this->m_args; }
 
+    /* Return the head.user field if found, otherwise NULL. */
+    const sam::txField* find_user() const;
+
   private:
     void init_args_ptrs();
 };

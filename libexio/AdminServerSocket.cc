@@ -190,7 +190,7 @@ void AdminServerSocket::create_listen_socket()
   Bind(m_servfd,(struct sockaddr*) &sockaddr, sizeof(sockaddr) );
 
   /* Mark as a passive socket */
-  Listen(m_servfd, 1023);
+  Listen(m_servfd, 100);
 }
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()

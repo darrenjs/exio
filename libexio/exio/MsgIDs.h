@@ -71,6 +71,7 @@ namespace id  /* identifiers */
   static const sam::qname QN_head_reqseqno  = QNAME( head, reqseqno );
   static const sam::qname QN_head_snapi     = QNAME( head, snapi );
   static const sam::qname QN_head_snapn     = QNAME( head, snapn );
+  static const sam::qname QN_head_user      = QNAME( head, user );
 
   // message types
   static const std::string admindescr   = "admindescr";

@@ -259,11 +259,8 @@ void AdminRequest::init_args_ptrs()
   this->head = NULL;
   this->body = NULL;
 
-
   const sam::txField* f_reqseqno = msg.root().find_field(id::QN_head_reqseqno);
   if (f_reqseqno) this->reqseqno = f_reqseqno->value();
-
-
 
   this->head = msg.root().find_child(id::head);
   this->body = msg.root().find_child(id::body);
@@ -302,6 +299,14 @@ void AdminRequest::init_args_ptrs()
     } // for
 
   }
+}
+//----------------------------------------------------------------------
+const sam::txField* AdminRequest::find_user() const
+{
+  if (head)
+    return  head->find_field(id::user);
+  else
+    return NULL;
 }
 
 //----------------------------------------------------------------------
