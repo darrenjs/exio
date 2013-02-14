@@ -40,6 +40,8 @@ class AdminInterfaceImpl : public AdminSession::Listener
     bool session_exists(const SID& id) const;
     void session_list(std::list< SID > &) const;
 
+    void session_info(SID, sid_desc&, bool& found) const;
+
     void session_stop_one(const SID&);
     void session_stop_all();
     size_t session_count() const;

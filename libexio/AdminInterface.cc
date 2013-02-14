@@ -147,4 +147,11 @@ void AdminInterface::clear_table(const std::string& tablename)
   m_impl->clear_table(tablename);
 }
 
+//----------------------------------------------------------------------
+void AdminInterface::session_info(SID sid, sid_desc& sd, bool& sf) const
+{
+  m_impl->session_info(sid, sd, sf);
+}
+//----------------------------------------------------------------------
+
 }

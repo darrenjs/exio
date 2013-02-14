@@ -34,9 +34,11 @@ class AdminInterface
 
     /* ----- Admin command management ----- */
 
-    void   add_admin(AdminCommand);
+    void add_admin(AdminCommand);
 
     /* ----- Client-sessions management ----- */
+
+    void session_info(SID, sid_desc&, bool& found) const;
 
     size_t session_count() const;
 

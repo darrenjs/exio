@@ -67,6 +67,9 @@ class AdminSession : public AdminIO::Listener
 
     void housekeeping();
 
+    const std::string& username() const { return m_username; }
+    const std::string& peeraddr() const { return m_peeraddr; }
+
   private:
 
     void notify_of_close();
@@ -91,6 +94,9 @@ class AdminSession : public AdminIO::Listener
      * might not be too reliable, because the underlying housekeeping timer
      * has around a 20 second precision. */
     int m_hb_intvl;
+
+    std::string m_username;
+    std::string m_peeraddr;
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);

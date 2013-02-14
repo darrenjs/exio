@@ -91,6 +91,7 @@ std::string sock_ntop(const struct sockaddr * sa,
 
 }
 
+// TODO: provide better signalling to caller if hostname lookup fails
 std::string sock_descr(int fd)
 {
   struct sockaddr_storage addr;
@@ -101,9 +102,7 @@ std::string sock_descr(int fd)
   if (!__e)
     return sock_ntop((const struct sockaddr *)&addr, addrlen);
   else
-    return "????";
-
-
+    return "unknown";
 }
 
 //----------------------------------------------------------------------
@@ -118,7 +117,8 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_listener( l ),  // need store listener before IO started
     m_io( new AdminIO(m_appsvc, fd, this )),
     m_autoclose(false),
-    m_hb_intvl(60)
+    m_hb_intvl(60),
+    m_peeraddr( sock_descr(fd) )
 {
 }
 //----------------------------------------------------------------------

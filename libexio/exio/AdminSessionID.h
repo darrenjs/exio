@@ -6,6 +6,12 @@
 namespace exio
 {
 
+struct sid_desc
+{
+    std::string username;
+    std::string peeraddr;
+};
+
 /* Unique Session ID provided to each AdminSession */
 class SID
 {

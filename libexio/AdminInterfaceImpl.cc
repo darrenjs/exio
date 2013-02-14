@@ -653,7 +653,7 @@ AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
   os << "pid: " << getpid() << "\n";
 
   // username - use cuserid because that is user ID of the process
-  char username[L_cuserid];
+  char username[256];
   memset(username, 0, sizeof(username));
   cuserid(username);
   username[sizeof(username)-1] = '\0';
@@ -926,6 +926,29 @@ void AdminInterfaceImpl::serialise_admins(sam::txMessage& msg) const
   std::ostringstream os;
   os << nadmin;
   adminset.put_field(id::admincount, os.str());
+}
+
+//----------------------------------------------------------------------
+void AdminInterfaceImpl::session_info(SID sid,
+                                      sid_desc& sd,
+                                      bool& found) const
+{
+  cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+  std::map< SID, AdminSession* >::const_iterator iter =
+    m_sessions.items.find(sid);
+
+  if (iter == m_sessions.items.end())
+  {
+    found = false;
+    return;
+  }
+  else
+  {
+    found = true;
+    sd.username = iter->second->username();
+    sd.peeraddr = iter->second->peeraddr();
+  }
 }
 
 
