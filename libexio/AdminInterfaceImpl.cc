@@ -431,7 +431,8 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   // sessions wants auto-close.
   if ( !exio::has_pending(resp.msg) and session.wants_autoclose() )
   {
-    _INFO_(m_logsvc, "Session will be closed: " << session.id().addr());
+    _INFO_(m_logsvc, "Session will be closed: " << session.id()
+           << " - " << session.peeraddr());
     session.close_io();
   }
 }
@@ -552,7 +553,7 @@ void AdminInterfaceImpl::createNewSession(int fd)
   }
 
   _INFO_(m_appsvc.log(), "Connection from "
-         << session->id().addr()
+         << session->peeraddr()
          << " sessionid " << session->id());
 
   // Send a logon message to the new connection.
@@ -706,7 +707,10 @@ AdminResponse AdminInterfaceImpl::admincmd_sessions(
        s != sessions.end(); ++s)
   {
     std::vector<std::string> values;
-    values.push_back( s->addr() );  // "addr"
+
+    sid_desc sessioninfo; bool found;
+    session_info(*s, sessioninfo, found);
+    values.push_back( sessioninfo.peeraddr );  // "addr"
 
     std::string serviceid="";
     {
@@ -719,7 +723,7 @@ AdminResponse AdminInterfaceImpl::admincmd_sessions(
     values.push_back( serviceid ); // "serviceid"
 
     // note: using the IP end-point as the rowkey
-    builder.add_row(s->addr(), values );
+    builder.add_row(sessioninfo.peeraddr, values );
   }
 
   return resp;

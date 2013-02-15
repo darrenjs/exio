@@ -48,18 +48,15 @@ std::string SID::toString() const
 //----------------------------------------------------------------------
 SID::SID()
   : m_unqiue_id( 0 ),
-    m_fd ( 0 ),
-    m_label( "" )
+    m_fd ( 0 )
 {
   // TODO: I want to make the ID to be even safer.  So add some extra fields:  port and time
 }
 
 SID::SID(unsigned long long id,
-         int fd,
-         const std::string& label)
+         int fd)
   : m_unqiue_id( id ),
-    m_fd ( fd ),
-    m_label( label )
+    m_fd ( fd )
 {
 }
 
@@ -111,8 +108,7 @@ AdminSession::AdminSession(AppSvc& appsvc,
                            AdminSession::Listener* l)
   : m_appsvc( appsvc),
     m_id(AdminSessionIdGenerator::next_admin_sessionid(),
-         fd,
-         sock_descr(fd)),
+         fd),
     m_session_valid(true),
     m_listener( l ),  // need store listener before IO started
     m_io( new AdminIO(m_appsvc, fd, this )),

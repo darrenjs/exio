@@ -19,8 +19,7 @@ class SID
     SID();  // default value represents invalid session ID
 
     SID(unsigned long long id,
-       int fd,
-       const std::string & label);
+       int fd);
 
     bool operator==(SID rhs) const
     {
@@ -35,8 +34,6 @@ class SID
         or
         (this->m_unqiue_id == rhs.m_unqiue_id and this->m_fd < rhs.m_fd);
     }
-    // Textual description of the connection address
-    const std::string & addr() const { return m_label; }
 
     // Textual description of the connection address
     std::string toString() const;
@@ -44,7 +41,6 @@ class SID
   private:
     unsigned long long  m_unqiue_id;
     int m_fd;
-    std::string m_label;
 };
 
 
