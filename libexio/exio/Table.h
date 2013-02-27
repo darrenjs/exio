@@ -165,6 +165,8 @@ class DataTable
     void add_column_NOLOCK(const std::string & column,
                            std::list<TableEventPtr>& events);
 
+    void   copy_subscribers(std::vector< SID > &subs) const;
+
     std::string m_table_name;
     AdminInterfaceImpl * m_ai;
     AppSvc * m_appsvc;
@@ -175,9 +177,16 @@ class DataTable
     std::vector< DataRow >          m_rows;
     std::map< std::string, size_t > m_row_index;
 
-    std::vector< SID > m_subscribers; // TODO: should have a lock?
+    mutable cpp11::mutex m_subscriberslock;
+    std::vector< SID > m_subscribers;
 
+    // Note: if ever the subscriber-lock and table-lock have to be held at the
+    // same time, then the table-lock must be locked first, followed by the
+    // subscribers-lock
     mutable cpp11::mutex m_tablelock; // big table lock
+
+
+
 
     /* Column attributes */
     std::map<std::string, std::list<sam::txContainer> > m_column_attrs;

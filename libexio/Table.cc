@@ -129,16 +129,30 @@ DataTable::DataTable(const std::string& table_name,
 //----------------------------------------------------------------------
 void DataTable::add_subscriber(const SID& session)
 {
+
   cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
 
+
+  // Note: it is important to add the subcriber to the list of subscribers
+  // while he holding the table-lock.  This is so that we can be sure that
+  // when a new subscriber is added to this table, they will first receive a
+  // table-snapshot followed by all table-updates.  We have to ensure that
+  // sequence cannot happen in the reverse order, or that, some updates can go
+  // missing.  If we did the opposite approach, of first (and temporarily)
+  // holding the subscribers-lock before geting the table-lock, there is a
+  // good chance that a new subscriber would receive a table update before the
+  // snapshot!
+
+  {
+    cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
+    m_subscribers.push_back( session );
+  }
 
   // NOTE: don't need to have this kind of logging yet.  We don't yet have
   // ability to subscribe/subscribe from individual tables
 
 //  _INFO_(m_appsvc->log(), "Adding " << session << " to table ( " <<
 //         m_table_name << " )");
-
-  m_subscribers.push_back( session );
 
 
   /* serialise table description */
@@ -173,51 +187,20 @@ void DataTable::add_subscriber(const SID& session)
   }
   m_ai->send_one(tabledescr.message(), session);
 
-
-
-  /* Admin description */
-
-//  m_ai->send_one(am, session);
-
   // serialise table content
   _nolock_send_snapshopt( session );
-  // SnapshotSerialiser serial;
-  // serial.set_table_name( m_table_name );
-
-  // for( std::vector< DataRow >::iterator iter=m_rows.begin();
-  //      iter != m_rows.end(); ++iter)
-  // {
-  //   const MetaForCol* meta = NULL;
-
-  //   PCMD::const_iterator rowpcmd = m_pcmd.find(iter->rowkey());
-  //   if (rowpcmd != m_pcmd.end())
-  //   {
-  //     meta = &(rowpcmd->second);
-  //   }
-
-  //   serial.add_row(*iter, meta);
-  // }
-  // m_ai->send_one(serial.message(), session);
-
 }
 
 //----------------------------------------------------------------------
 void DataTable::del_subscriber(const SID& session)
 {
-  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
-
+  cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
 
   while( true )
   {
     std::vector< SID >::iterator iter
       = find(m_subscribers.begin(), m_subscribers.end(), session);
     if (iter == m_subscribers.end()) break;
-
-
-
-    // NOTE: don't need to have this kind of logging yet.  We don't yet have
-    // ability to subscribe/subscribe from individual tables
-    //_INFO_(m_appsvc->log(), "Removing " << session << " from " << m_table_name);
 
     m_subscribers.erase( iter );
   };
@@ -237,6 +220,15 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
 
   std::list<sam::txMessage> msgs;
 
+  // Take a copy of the subscribers list.  This is done so that any recent
+  // changes to the subscriber list can be picked up now.  An alternative
+  // approach would be lock the m_subscriberslock while iterating over the
+  // m_subscribers - however that would mean we have to hold onto the
+  // subscribers-lock for quite a long while.  Note too that the elements in
+  // m_subscribers are weak references, ie, they are not direct pointers, but
+  // instead are a label that will later be the basis of a lookup.
+  std::vector< SID > subs;
+  copy_subscribers(subs);
 
   for (std::list<TableEventPtr>::iterator iter = events.begin();
        iter != events.end(); ++iter)
@@ -252,8 +244,8 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
            mit != msgs.end(); ++mit)
       {
 
-        for (std::vector<SID>::iterator s = m_subscribers.begin();
-             s != m_subscribers.end(); ++s)
+        for (std::vector<SID>::iterator s = subs.begin();
+             s != subs.end(); ++s)
         {
           m_ai->send_one(*mit, *s);
         }
@@ -268,8 +260,8 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
            mit != msgs.end(); ++mit)
       {
 
-        for (std::vector<SID>::iterator s = m_subscribers.begin();
-             s != m_subscribers.end(); ++s)
+        for (std::vector<SID>::iterator s = subs.begin();
+             s != subs.end(); ++s)
         {
           m_ai->send_one(*mit, *s);
         }
@@ -284,8 +276,8 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
       for (std::list<sam::txMessage>::iterator mit = msgs.begin();
            mit != msgs.end(); ++mit)
       {
-        for (std::vector<SID>::iterator s = m_subscribers.begin();
-             s != m_subscribers.end(); ++s)
+        for (std::vector<SID>::iterator s = subs.begin();
+             s != subs.end(); ++s)
         {
           m_ai->send_one(*mit, *s);
         }
@@ -413,7 +405,7 @@ size_t DataTable::get_row_count() const
 //----------------------------------------------------------------------
 void DataTable::table_subscribers(std::list< SID >& __list) const
 {
-  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
+  cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
 
   for (std::vector< SID >::const_iterator iter = m_subscribers.begin();
        iter != m_subscribers.end(); ++iter)
@@ -421,7 +413,6 @@ void DataTable::table_subscribers(std::list< SID >& __list) const
     __list.push_back( *iter );
   }
 }
-
 
 //----------------------------------------------------------------------
 bool DataTable::_nolock_has_row(const std::string& rowkey) const
@@ -544,13 +535,18 @@ void DataTable::update_meta(const std::string & rowkey,
 }
 
 //----------------------------------------------------------------------
+/*
+ * Send a table snapshot too all current subscribers
+ */
 void DataTable::snapshot()
 {
+  std::vector< SID > subs;
+  copy_subscribers( subs );
+
   cpp11::lock_guard<cpp11::mutex> guard( m_tablelock ); // lock table
 
-
-  for (std::vector<SID>::iterator s = m_subscribers.begin();
-       s != m_subscribers.end(); ++s)
+  for (std::vector<SID>::iterator s = subs.begin();
+       s != subs.end(); ++s)
   {
     _nolock_send_snapshopt(*s);
   }
@@ -684,8 +680,20 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
   // _INFO_(m_appsvc->log(), "enclen " << enclen);
   // m_ai->send_one(serial.message(), session);
 }
+//----------------------------------------------------------------------
 
+void DataTable::copy_subscribers(std::vector< SID > &subs) const
+{
+  cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
 
+  subs.reserve( m_subscribers.size() );
+
+  for (std::vector< SID >::const_iterator iter = m_subscribers.begin();
+       iter != m_subscribers.end(); ++iter)
+  {
+    if ( m_ai->session_exists( *iter ) ) subs.push_back( *iter );
+  }
+}
 
 //======================================================================
 
