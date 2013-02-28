@@ -3,6 +3,7 @@
 
 #include "thread.h"
 
+#include <ostream>
 
 namespace exio
 {
@@ -16,6 +17,8 @@ class AdminServerSocket
 
     /* Start listening on the server socket. */
     void start();
+
+    void log_thread_ids(std::ostream&) const;
 
   private:
 
@@ -33,7 +36,7 @@ class AdminServerSocket
 
     AdminInterfaceImpl* m_aii;
     int m_servfd;
-
+    int m_threadid;
 
 //    qm::Thread m_acceptThr;
 };

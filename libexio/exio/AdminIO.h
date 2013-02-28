@@ -51,7 +51,7 @@ struct QueuedItem
 /* make this look like C++ */
 class AtomicInt
 {
-    int m_value;
+    volatile int m_value;
     mutable cpp11::mutex m_mutex;
 
   public:
@@ -61,7 +61,7 @@ class AtomicInt
     int value() const
     {
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
-      return  m_value;
+      return m_value;
     }
 
     void value( int n )
@@ -138,6 +138,9 @@ class AdminIO
 
     time_t last_write() const { return m_last_write; }
 
+    int reader_lwp() const { return m_lwp.reader; }
+    int writer_lwp() const { return m_lwp.writer; }
+
   private:
     AdminIO(const AdminIO&); // no copy
     AdminIO& operator=(const AdminIO&); // no assignment
@@ -150,6 +153,15 @@ class AdminIO
     void wait_and_pop(QueuedItem& value);
 
     void push_item(const QueuedItem& i);
+
+    // Thread IDs
+    struct ThreadIDs
+    {
+        int reader;
+        int writer;
+        AtomicInt count;
+        ThreadIDs():reader(0), writer(0), count(0) {}
+    } m_lwp;
 
     AppSvc& m_appsvc;
     Listener * m_listener;
@@ -181,6 +193,7 @@ class AdminIO
     // IO stats
     time_t m_last_write;
     size_t m_total_out;
+
 };
 
 } // namespace qm

@@ -15,6 +15,7 @@
 #include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/syscall.h>
 
 // WARNING: before changing this value, consider that the housekeeping time
 // interval & thread might be used somewhere within exio for other
@@ -162,7 +163,8 @@ namespace exio
 
 //----------------------------------------------------------------------
 AdminServerSocket::AdminServerSocket(AdminInterfaceImpl* ai)
-  : m_aii(ai)
+  : m_aii(ai),
+    m_threadid(0)
 {
   /* CAUTION: don't try to use the m_ai parameter in here, because that object
    * itself it likely to still be under initialisation. */
@@ -193,11 +195,24 @@ void AdminServerSocket::create_listen_socket()
   Listen(m_servfd, 100);
 }
 //----------------------------------------------------------------------
+void AdminServerSocket::log_thread_ids(std::ostream& os) const
+{
+  os << "accept (LWP " << m_threadid << ")";
+}
+//----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
-  _INFO_(m_aii->appsvc().log(), "Server socket thread starting" );
+  m_threadid = syscall(SYS_gettid);
+  std::ostringstream os;
+  os << "Server socket thread starting";
+
+  // get the LWP ID of our thread - this is what appears in "ps" command
+  os << " (LWP " << m_threadid << ")";
+
+  _INFO_(m_aii->appsvc().log(), os.str() );
+
   _INFO_(m_aii->appsvc().log(),
-         "listening on port " << m_aii->appsvc().conf().server_port);
+         "Listening on port " << m_aii->appsvc().conf().server_port);
 
   int conn_count = 0;
 

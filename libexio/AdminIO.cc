@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 
 #define READ_BUF_SIZE sam::MAX_MSG_LEN
 
@@ -70,8 +71,14 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, Listener * l)
      m_log_io_events(false),
      m_last_write(0),
      m_total_out(0)
-
 {
+  // before we return, lets try to wait a little while so that the thread IDs
+  // of the socket reader & writer threads get assigned
+  int loops = 0;
+  while (m_lwp.count.value() != 2 and loops++ < 10)
+  {
+    usleep(10000);
+  }
 }
 
 //----------------------------------------------------------------------
@@ -130,6 +137,9 @@ bool read_timeo(int fd, int sec, int usec)
 //----------------------------------------------------------------------
 void AdminIO::socket_read_TEP()
 {
+  m_lwp.reader = syscall(SYS_gettid);
+  m_lwp.count.incr();
+
   bool call_request_stop = true;
   try
   {
@@ -347,6 +357,9 @@ void AdminIO::wait_and_pop(QueuedItem& value)
 //----------------------------------------------------------------------
 void AdminIO::socket_write_TEP()
 {
+  m_lwp.writer = syscall(SYS_gettid);
+  m_lwp.count.incr();
+
   try
   {
     socket_write();

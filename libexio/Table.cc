@@ -129,6 +129,9 @@ DataTable::DataTable(const std::string& table_name,
 //----------------------------------------------------------------------
 void DataTable::add_subscriber(const SID& session)
 {
+  std::ostringstream os;
+  os << "Session " << session << " subscribing to table " << m_table_name;
+  _INFO_(m_appsvc->log(), os.str() );
 
   cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
 
@@ -194,6 +197,7 @@ void DataTable::add_subscriber(const SID& session)
 //----------------------------------------------------------------------
 void DataTable::del_subscriber(const SID& session)
 {
+  bool existed = false;
   cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
 
   while( true )
@@ -203,7 +207,15 @@ void DataTable::del_subscriber(const SID& session)
     if (iter == m_subscribers.end()) break;
 
     m_subscribers.erase( iter );
+    existed = true;
   };
+
+  if (existed)
+  {
+    std::ostringstream os;
+    os << "Session " << session << " unsubscribed from table " << m_table_name;
+    _INFO_(m_appsvc->log(), os.str() );
+  }
 }
 //----------------------------------------------------------------------
 

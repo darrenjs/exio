@@ -15,6 +15,8 @@ Work: new approach to snapshots
 ALL
 ---
 
+* [MEDIUM] Introduce provide AtomicInt & AtomicBool classes
+
 * [EASY] Allow it to be configured whether the RowLastUpdated is automatically
          added or not.
 

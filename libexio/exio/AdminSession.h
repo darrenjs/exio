@@ -70,6 +70,11 @@ class AdminSession : public AdminIO::Listener
     const std::string& username() const { return m_username; }
     const std::string& peeraddr() const { return m_peeraddr; }
 
+    bool logon_recevied() const { return m_logon_received; }
+
+    void log_thread_ids(std::ostream&) const;
+
+
   private:
 
     void notify_of_close();
@@ -81,12 +86,13 @@ class AdminSession : public AdminIO::Listener
     AppSvc& m_appsvc;
     SID  m_id;
     std::string m_serviceid;  // what peer has provided via Logon
-
+    bool m_logon_received;
     bool m_session_valid;
 
-    Listener* m_listener;
+    std::string m_username;
+    std::string m_peeraddr;
 
-    AdminIO * m_io;
+    Listener* m_listener;
 
     bool m_autoclose;
 
@@ -95,8 +101,7 @@ class AdminSession : public AdminIO::Listener
      * has around a 20 second precision. */
     int m_hb_intvl;
 
-    std::string m_username;
-    std::string m_peeraddr;
+    AdminIO * m_io;
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);

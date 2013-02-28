@@ -115,6 +115,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
     AdminResponse admincmd_table_subs(AdminRequest& r);
     AdminResponse admincmd_info(AdminRequest& r);
     AdminResponse admincmd_snapshot(AdminRequest& r);
+    AdminResponse admincmd_diag(AdminRequest& r);
 
     void handle_logon_msg(const sam::txMessage&, AdminSession&);
     void session_cleanup();
@@ -132,6 +133,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
     mutable struct
     {
+        unsigned long createdCount;
         std::map< SID, AdminSession* > items;
         cpp11::mutex lock;
     } m_sessions;

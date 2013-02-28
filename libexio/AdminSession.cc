@@ -107,14 +107,14 @@ AdminSession::AdminSession(AppSvc& appsvc,
                            int fd,
                            AdminSession::Listener* l)
   : m_appsvc( appsvc),
-    m_id(AdminSessionIdGenerator::next_admin_sessionid(),
-         fd),
+    m_id(AdminSessionIdGenerator::next_admin_sessionid(), fd),
+    m_logon_received(false),
     m_session_valid(true),
+    m_peeraddr( sock_descr(fd) ),
     m_listener( l ),  // need store listener before IO started
-    m_io( new AdminIO(m_appsvc, fd, this )),
     m_autoclose(false),
     m_hb_intvl(60),
-    m_peeraddr( sock_descr(fd) )
+    m_io( new AdminIO(m_appsvc, fd, this ))
 {
 }
 //----------------------------------------------------------------------
@@ -128,7 +128,12 @@ AdminSession::~AdminSession()
 
   delete m_io;
 }
-
+//----------------------------------------------------------------------
+void AdminSession::log_thread_ids(std::ostream& os) const
+{
+  os << "reader (LWP " <<  m_io->reader_lwp() << ") "
+     << "writer (LWP " << m_io->writer_lwp() << ")";
+}
 //----------------------------------------------------------------------
 
 bool AdminSession::enqueueToSend(const sam::txMessage& msg)
@@ -237,12 +242,46 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
   // Identify the message
   if (msg.type() == id::msg_logon)
   {
-    const sam::txField* fsvcid = msg.root().find_field(id::QN_serviceid);
-    if (fsvcid and m_serviceid.empty())
+    if (m_logon_received)
     {
-      // only allow update if m_serviceid is empty, to prevent changing
-      // service-id on a single session.
-      m_serviceid = fsvcid->value();
+      std::ostringstream os;
+      os << "Ignoring logon message for session " << m_id
+         << ". Logon already occurred.";
+      _WARN_(m_appsvc.log(), os.str());
+    }
+    else
+    {
+      m_logon_received = true;
+
+      const sam::txField* fsvcid = msg.root().find_field(id::QN_serviceid);
+      const sam::txField* fuser  = msg.root().find_field(id::QN_head_user);
+
+      if (!fsvcid)
+      {
+        _WARN_(m_appsvc.log(), "Logon for session " << m_id
+               << " is missing field " << id::QN_serviceid);
+      }
+      else
+      {
+        m_serviceid = fsvcid->value();
+      }
+      if (!fuser)
+      {
+        _WARN_(m_appsvc.log(), "Logon for session " << m_id
+               << " is missing field " << id::QN_head_user);
+      }
+      else
+      {
+        m_username = fuser->value();
+      }
+
+      std::ostringstream os;
+      os << "Received logon for session "
+         << m_id << ", service-id [" << m_serviceid << "], "
+         << "username [" << m_username << "]";
+      _INFO_(m_appsvc.log(), os.str());
+
+
     }
 
     /* NOTE: we allow logon to continue further up the stack */

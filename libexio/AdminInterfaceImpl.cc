@@ -26,6 +26,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
     m_monitor(this),
     m_start_time( ::time(NULL) )
 {
+  m_sessions.createdCount = 0;
+
   /*
    * NOTE: design principle here: we should not add admins which modify table
    * data (eg, clear_table).  Management of table data is the responsibility
@@ -67,6 +69,11 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           "broadcast a table snapshot", "",
                           &AdminInterfaceImpl::admincmd_snapshot, this,
                           adminattrs) );
+
+  admin_add( AdminCommand("diag",
+                          "dump exio diagnostics", "",
+                          &AdminInterfaceImpl::admincmd_diag, this,
+                          adminattrs) );
 }
 
 //----------------------------------------------------------------------
@@ -86,7 +93,7 @@ void AdminInterfaceImpl::session_closed(AdminSession& session)
     }
     else
     {
-      /* oh dear, we failed to find out session based on lookup. now lets try
+      /* oh dear, we failed to find our session based on lookup. now lets try
        * searching for its address */
       for (i=m_sessions.items.begin(); i != m_sessions.items.end(); ++i)
       {
@@ -104,8 +111,10 @@ void AdminInterfaceImpl::session_closed(AdminSession& session)
     m_expired_sessions.items[ session.id() ] = &session;
   }
 
-  // TODO:Now remove this session from any table subscriptions it might have held
+  // Remove session from any table subscriptions
   m_monitor.unsubscribe_all( session.id() );
+
+  _INFO_(m_logsvc,"Session " << session.id() << " closed");
 }
 
 //----------------------------------------------------------------------
@@ -550,11 +559,17 @@ void AdminInterfaceImpl::createNewSession(int fd)
     // creating a new unique ID, or, reject the connection.
 
     m_sessions.items[ session->id() ] = session;
+    m_sessions.createdCount++;
   }
 
   _INFO_(m_appsvc.log(), "Connection from "
          << session->peeraddr()
-         << " sessionid " << session->id());
+         << ", created session " << session->id());
+
+  std::ostringstream os;
+  os << "IO threads for session " << session->id() << ": ";
+  session->log_thread_ids(os);
+  _INFO_(m_appsvc.log(),  os.str() );
 
   // Send a logon message to the new connection.
 
@@ -792,7 +807,6 @@ void AdminInterfaceImpl::add_columns(const std::string& table_name,
 void AdminInterfaceImpl::handle_logon_msg(const sam::txMessage& logonmsg,
                                           AdminSession& session)
 {
-
   // TODO: for now we will automatically subscribe to all tables, unless the
   // QN_noautosub field is present. This should be changed so that a table
   // subscription is only made by the subscribe message
@@ -953,6 +967,58 @@ void AdminInterfaceImpl::session_info(SID sid,
     sd.username = iter->second->username();
     sd.peeraddr = iter->second->peeraddr();
   }
+}
+//----------------------------------------------------------------------
+AdminResponse AdminInterfaceImpl::admincmd_diag(AdminRequest& request)
+{
+  AdminResponse resp(request.reqseqno);
+
+  std::ostringstream os;
+
+
+  os << "Sessions\n";
+  os << "--------\n";
+
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+    os << "Total ever created: " << m_sessions.createdCount << "\n";
+    os << "Current count: " << m_sessions.items.size() << "\n";
+    os << "SessionID, PeerAddr, PeerServiceID, User, Logon\n";
+    for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
+           iter != m_sessions.items.end(); ++iter)
+    {
+      os << "  " << iter->first << ", ";
+      os << iter->second->peeraddr() << ", ";
+      os << iter->second->peer_serviceid() << ", ";
+      os << iter->second->username() << ", ";
+      os << iter->second->logon_recevied() << ", ";
+      os << "\n";
+    }
+  }
+
+  os << "\nThreads\n-------\n";
+
+  os << "server-socket: ";
+  m_serverSocket.log_thread_ids(os); os << "\n";
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+    for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
+         iter != m_sessions.items.end(); ++iter)
+    {
+      os << "session " << iter->first << ": ";
+      iter->second->log_thread_ids(os);
+      os << "\n";
+    }
+  }
+
+  // TODO: next add table information
+
+  exio::add_rescode(resp.msg, 0);
+  exio::set_pending(resp.msg, false);
+
+  exio::formatreply_string(resp.body(), os.str());
+
+  return resp;
 }
 
 

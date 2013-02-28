@@ -597,6 +597,7 @@ int main(const int argc, char** argv)
     std::string serviceid = build_service_id(argv[0]);
     sam::txMessage logon(exio::id::msg_logon);
     logon.root().put_field(exio::id::QN_serviceid, serviceid);
+    logon.root().put_field(exio::id::QN_head_user, build_user_id());
 
     if (not cmd.empty())
     {
