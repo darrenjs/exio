@@ -61,4 +61,4 @@ libexio_la_LIBADD = ../libcpp11/libcpp11.la
 # - REVISION: revision of current version. Incr. base on internal changes.
 # - AGE: indicates compatibilty with previous version of the shlib.
 #
-libexio_la_LDFLAGS = -version-info 1:0:0
+libexio_la_LDFLAGS = -version-info 1:2:0

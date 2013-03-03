@@ -1,6 +1,7 @@
 #include "exio/utils.h"
 
 #include <sstream>
+#include <iomanip>
 
 #include <string.h>
 
@@ -66,8 +67,24 @@ implementation of strerror_r .  See man page.
   return "unknown";
 }
 
+//----------------------------------------------------------------------
 
+/* date-timestamp */
+std::string datetimestamp(time_t now)
+{
+  std::ostringstream os;
 
+  struct tm _tm; localtime_r(&now, &_tm); // break into parts
+
+  os << (_tm.tm_year+1900) << '/'
+     << std::setfill('0') << std::setw(2) << (_tm.tm_mon+1) << '/'
+     << std::setw(2) << _tm.tm_mday << '-'
+     << std::setw(2) << _tm.tm_hour << ':'
+     << std::setw(2) << _tm.tm_min << ':'
+     << std::setw(2) << _tm.tm_sec;
+
+  return os.str();
+}
 
 
 }} // namespace

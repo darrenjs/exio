@@ -93,6 +93,7 @@ std::string sock_descr(int fd)
 {
   struct sockaddr_storage addr;
   socklen_t addrlen = sizeof(addr);
+  memset(&addr,0,sizeof(addr));
 
   int __e =  getpeername(fd, (struct sockaddr *) &addr, &addrlen);
 
@@ -114,6 +115,7 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_listener( l ),  // need store listener before IO started
     m_autoclose(false),
     m_hb_intvl(60),
+    m_start(time(NULL)),
     m_io( new AdminIO(m_appsvc, fd, this ))
 {
 }
@@ -131,7 +133,7 @@ AdminSession::~AdminSession()
 //----------------------------------------------------------------------
 void AdminSession::log_thread_ids(std::ostream& os) const
 {
-  os << "reader (LWP " <<  m_io->reader_lwp() << ") "
+  os << "reader (LWP " << m_io->reader_lwp() << ") "
      << "writer (LWP " << m_io->writer_lwp() << ")";
 }
 //----------------------------------------------------------------------
@@ -223,7 +225,6 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 void AdminSession::close_io()
 {
-  //_INFO_(m_appsvc.log(), "AdminSession::close_io");
   m_io->request_stop();
 }
 
@@ -277,11 +278,9 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
 
       std::ostringstream os;
       os << "Received logon for session "
-         << m_id << ", service-id [" << m_serviceid << "], "
-         << "username [" << m_username << "]";
+         << m_id << ", service-id '" << m_serviceid << "', "
+         << "username '" << m_username << "'";
       _INFO_(m_appsvc.log(), os.str());
-
-
     }
 
     /* NOTE: we allow logon to continue further up the stack */
@@ -294,7 +293,6 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
 
 void AdminSession::io_closed()
 {
-//  _INFO_("AdminSession::io_closed");
   m_session_valid = false;
 
   m_listener->session_closed( *this );

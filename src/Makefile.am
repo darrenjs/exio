@@ -10,11 +10,11 @@ AM_LDFLAGS=-pthread
 LDADD = -L../libexio -lexio $(LIBLS)
 
 bin_PROGRAMS=admin
-noinst_PROGRAMS=server_demo
+#noinst_PROGRAMS=server_demo
 
 # admin
 
 admin_SOURCES=admin.cc
 
 # server_dem
-server_demo_SOURCES=server_demo.cc
+#server_demo_SOURCES=server_demo.cc

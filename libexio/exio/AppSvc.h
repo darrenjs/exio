@@ -38,6 +38,8 @@ class ConsoleLogger : public LogService
 {
   public:
 
+    enum StreamType { eStdout, eStderr };
+
     enum Levels {eAll = 0,
                  eDebug,
                  eInfo,
@@ -46,9 +48,10 @@ class ConsoleLogger : public LogService
                  eNone = 255};
     int level;
 
-    ConsoleLogger(int l = eInfo) : level(l){}
+    ConsoleLogger(StreamType stream,
+                  int __level) : level(__level), m_stream(stream) {}
 
-    virtual void debug(const std::string&  );
+    virtual void debug(const std::string& );
     virtual void info(const std::string&  );
     virtual void warn(const std::string&  );
     virtual void error(const std::string& );
@@ -57,6 +60,10 @@ class ConsoleLogger : public LogService
     virtual bool want_info()  { return level <= eInfo; }
     virtual bool want_warn()  { return level <= eWarn; }
     virtual bool want_error() { return level <= eError; }
+
+  private:
+
+    StreamType m_stream;
 };
 
 class AppSvc

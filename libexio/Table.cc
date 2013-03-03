@@ -197,21 +197,14 @@ void DataTable::add_subscriber(const SID& session)
 //----------------------------------------------------------------------
 void DataTable::del_subscriber(const SID& session)
 {
-  bool existed = false;
   cpp11::lock_guard<cpp11::mutex> subscribersguard( m_subscriberslock );
 
-  while( true )
-  {
-    std::vector< SID >::iterator iter
-      = find(m_subscribers.begin(), m_subscribers.end(), session);
-    if (iter == m_subscribers.end()) break;
+  std::vector< SID >::iterator iter =
+    find(m_subscribers.begin(), m_subscribers.end(), session);
 
+  if (iter != m_subscribers.end())
+  {
     m_subscribers.erase( iter );
-    existed = true;
-  };
-
-  if (existed)
-  {
     std::ostringstream os;
     os << "Session " << session << " unsubscribed from table " << m_table_name;
     _INFO_(m_appsvc->log(), os.str() );
@@ -242,61 +235,66 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
   std::vector< SID > subs;
   copy_subscribers(subs);
 
-  for (std::list<TableEventPtr>::iterator iter = events.begin();
-       iter != events.end(); ++iter)
+  if (not subs.empty())
   {
-    TableEvent* ev = iter->ev;
-
-    if (ev->type == TableEvent::eRowMultiUpdate)
+    for (std::list<TableEventPtr>::iterator iter = events.begin();
+         iter != events.end(); ++iter)
     {
-      RowMultiUpdate* rev = dynamic_cast<RowMultiUpdate*>(ev);
+      TableEvent* ev = iter->ev;
 
-      rev->serialise(msgs);
-      for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-           mit != msgs.end(); ++mit)
+      if (ev->type == TableEvent::eRowMultiUpdate)
       {
+        RowMultiUpdate* rev = dynamic_cast<RowMultiUpdate*>(ev);
 
-        for (std::vector<SID>::iterator s = subs.begin();
-             s != subs.end(); ++s)
+        rev->serialise(msgs);
+        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
+             mit != msgs.end(); ++mit)
         {
-          m_ai->send_one(*mit, *s);
+
+          for (std::vector<SID>::iterator s = subs.begin();
+               s != subs.end(); ++s)
+          {
+            m_ai->send_one(*mit, *s);
+          }
         }
       }
-    }
-    else if (ev->type == TableEvent::eTableCleared)
-    {
-      TableCleared* rev = dynamic_cast<TableCleared*>(ev);
-
-      rev->serialise(msgs);
-      for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-           mit != msgs.end(); ++mit)
+      else if (ev->type == TableEvent::eTableCleared)
       {
+        TableCleared* rev = dynamic_cast<TableCleared*>(ev);
 
-        for (std::vector<SID>::iterator s = subs.begin();
-             s != subs.end(); ++s)
+        rev->serialise(msgs);
+        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
+             mit != msgs.end(); ++mit)
         {
-          m_ai->send_one(*mit, *s);
+
+          for (std::vector<SID>::iterator s = subs.begin();
+               s != subs.end(); ++s)
+          {
+            m_ai->send_one(*mit, *s);
+          }
         }
       }
-    }
-    else if (ev->type == TableEvent::ePCMD)
-    {
-      PCMDEvent* rev = dynamic_cast<PCMDEvent*>(ev);
-
-      rev->serialise(msgs);
-
-      for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-           mit != msgs.end(); ++mit)
+      else if (ev->type == TableEvent::ePCMD)
       {
-        for (std::vector<SID>::iterator s = subs.begin();
-             s != subs.end(); ++s)
+        PCMDEvent* rev = dynamic_cast<PCMDEvent*>(ev);
+
+        rev->serialise(msgs);
+
+        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
+             mit != msgs.end(); ++mit)
         {
-          m_ai->send_one(*mit, *s);
+          for (std::vector<SID>::iterator s = subs.begin();
+               s != subs.end(); ++s)
+          {
+            m_ai->send_one(*mit, *s);
+          }
         }
       }
     }
   }
 
+
+  /* cleanup and exit */
   // TODO: I should be deleting the objecst here????
   events.clear();
 }

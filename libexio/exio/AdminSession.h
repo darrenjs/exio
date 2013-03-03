@@ -74,6 +74,11 @@ class AdminSession : public AdminIO::Listener
 
     void log_thread_ids(std::ostream&) const;
 
+    // IO stats
+    time_t        start_time() const { return m_start; }
+    time_t        last_write() const { return (m_io)? m_io->last_write():0; }
+    unsigned long bytes_out()  const { return (m_io)? m_io->bytes_out():0; }
+    unsigned long bytes_in()   const { return (m_io)? m_io->bytes_in():0; }
 
   private:
 
@@ -101,7 +106,10 @@ class AdminSession : public AdminIO::Listener
      * has around a 20 second precision. */
     int m_hb_intvl;
 
+    time_t    m_start;
+
     AdminIO * m_io;
+
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);

@@ -66,11 +66,12 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, Listener * l)
      m_is_stopping( false ),
      m_threads_complete(0),
      m_have_data( false ),
-     m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),
-     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this)),
-     m_log_io_events(false),
+     m_bytesout(0),
+     m_bytesin(0),
      m_last_write(0),
-     m_total_out(0)
+     m_log_io_events(false),
+     m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),
+     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this))
 {
   // before we return, lets try to wait a little while so that the thread IDs
   // of the socket reader & writer threads get assigned
@@ -209,6 +210,8 @@ void AdminIO::read_from_socket()
     char* wp = buf + bytesavail; // write pointer
     ssize_t n = read( m_fd, wp, (READ_BUF_SIZE - bytesavail) );
     int const _err = errno;
+
+    if (n>0) m_bytesin += n;
 
     if (m_log_io_events)
     {
@@ -409,7 +412,6 @@ void AdminIO::socket_write()
       {
         int fd = m_fd;
 
-
         /* Note: now using send() instead of write(), so that we can prevent
          * SIGPIPE from being raised */
         const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
@@ -449,7 +451,7 @@ void AdminIO::socket_write()
         {
           bytes_done += n;
           m_last_write = time(NULL);
-          m_total_out += n;
+          if (n>0) m_bytesout+=n;
         }
       }
 

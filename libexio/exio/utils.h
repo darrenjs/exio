@@ -22,6 +22,9 @@ namespace utils {
   /* wrapper for strerr */
   std::string strerror(int __errno);
 
+  /* date-timestamp */
+  std::string datetimestamp(time_t now_secs);
+
 
 }} // namespace
 

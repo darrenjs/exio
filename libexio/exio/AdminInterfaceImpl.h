@@ -112,10 +112,10 @@ class AdminInterfaceImpl : public AdminSession::Listener
     AdminResponse admincmd_subscribe(AdminRequest& r);
     AdminResponse admincmd_sessions(AdminRequest& r);
     AdminResponse admincmd_help(AdminRequest& r);
-    AdminResponse admincmd_table_subs(AdminRequest& r);
     AdminResponse admincmd_info(AdminRequest& r);
     AdminResponse admincmd_snapshot(AdminRequest& r);
-    AdminResponse admincmd_diag(AdminRequest& r);
+    AdminResponse admincmd_diags(AdminRequest& r);
+    AdminResponse admincmd_table_subs(AdminRequest& r);
 
     void handle_logon_msg(const sam::txMessage&, AdminSession&);
     void session_cleanup();
@@ -123,6 +123,9 @@ class AdminInterfaceImpl : public AdminSession::Listener
     void serialise_admins(sam::txMessage&) const;
 
     void handle_admin_request(const sam::txMessage&, AdminSession&);
+
+    static void helper_session_descr(std::ostream&, AdminSession&,
+                                     const std::string&);
 
   private:
     AppSvc&          m_appsvc;

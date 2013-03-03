@@ -18,9 +18,6 @@ namespace sam
 
 namespace exio {
 
-
-
-
 class AdminInterfaceImpl;
 class SID;
 class DataTable;

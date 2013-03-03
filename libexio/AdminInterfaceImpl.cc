@@ -3,6 +3,7 @@
 #include "exio/AdminCommand.h"
 #include "exio/Logger.h"
 #include "exio/MsgIDs.h"
+#include "exio/utils.h"
 #include "config.h"
 
 #include <stdlib.h>
@@ -70,9 +71,14 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           &AdminInterfaceImpl::admincmd_snapshot, this,
                           adminattrs) );
 
-  admin_add( AdminCommand("diag",
+  admin_add( AdminCommand("diags",
                           "dump exio diagnostics", "",
-                          &AdminInterfaceImpl::admincmd_diag, this,
+                          &AdminInterfaceImpl::admincmd_diags, this,
+                          adminattrs) );
+
+  admin_add( AdminCommand("table_subs",
+                          "list subscribers for each table", "",
+                          &AdminInterfaceImpl::admincmd_table_subs, this,
                           adminattrs) );
 }
 
@@ -170,6 +176,9 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
 
   std::map<SID, AdminSession*>::iterator iter;
 
+
+
+
   // NOTE: use this logging section when debugging admin sessions that
   // disconnected but we are still trying sending messages to
 
@@ -202,7 +211,18 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
     _WARN_(m_logsvc, "no session found " << id
            << ", unable to send message: "
            << msg.type());
+
+    // build a string of all the sessions
+    std::ostringstream os;
+    for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
+    {
+      if (iter != m_sessions.items.begin()) os << ", ";
+      os << iter->first;
+    }
+    _INFO_(m_logsvc, "Current sessions: " << os.str());
+
   }
+
 }
 //----------------------------------------------------------------------
 void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
@@ -237,7 +257,17 @@ void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
   else
   {
     _WARN_(m_logsvc, "no session found " << id
-           << ", unable to send messages");
+           << ", unable to send message list");
+
+   // build a string of all the sessions
+    std::ostringstream os;
+    for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
+    {
+      if (iter != m_sessions.items.begin()) os << ", ";
+      os << iter->first;
+    }
+    _INFO_(m_logsvc, "Current sessions: " << os.str());
+
   }
 
 }
@@ -350,6 +380,18 @@ void AdminInterfaceImpl::session_msg_received(const sam::txMessage& reqmsg,
 }
 
 //----------------------------------------------------------------------
+
+void AdminInterfaceImpl::helper_session_descr(std::ostream& os,
+                                              AdminSession& session,
+                                              const std::string& user)
+{
+  os << "session " << session.id()
+     << " (service-id '" << session.peer_serviceid() << "', "
+     << "peer '" << session.peeraddr() << "', "
+     << "username '" << user << "')";
+}
+
+//----------------------------------------------------------------------
 void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
                                               AdminSession& session)
 {
@@ -360,6 +402,11 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   if (f_reqseqno) reqseqno = f_reqseqno->value();
 
   AdminResponse resp(reqseqno);
+
+  // we need to associate a username with this request - TODO: later I need
+  // to embeed this into the AdminRequest object etc and compare the
+  // username of both the sessions and the command
+  std::string user = session.username();
 
   try
   {
@@ -376,17 +423,25 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
 
     if (!command or command->value().empty() )
     {
-      // TODO: need to send back a reject message here
+      std::ostringstream os;
+      os << "Invalid admin requested by ";
+      helper_session_descr(os, session, user);
+      _WARN_(m_logsvc, os.str());
 
-      _ERROR_(m_logsvc, "Cannot identify command name of the request");
-      return;  /* ignore empty message for now : TODO: throw exception again? */
-      // throw std::runtime_error("request did not specify an admin
+      throw AdminError(id::err_admin_not_found, "invalid admin request");
     }
 
     // try to find a matching admin
     AdminCommand * admin = this->admin_find( command->value() );
     if (admin == NULL)
+    {
+      std::ostringstream os;
+      os << "Unknown admin '" << command->value() << "' requested by ";
+      helper_session_descr(os, session, user);
+      _WARN_(m_logsvc, os.str());
+
       throw AdminError(id::err_admin_not_found, "command not recognised");
+    }
 
     /*
 
@@ -406,8 +461,26 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
 
     */
 
+
     // TODO: need to build out the request object
     AdminRequest req( reqmsg,  session.id() );
+
+    {
+      std::ostringstream os;
+      os << "Admin '" << command->value() << "' with args [";
+
+      std::vector< std::string >::const_iterator argiter;
+      for (argiter=req.args().begin(); argiter!=req.args().end(); ++argiter)
+      {
+        if (argiter!=req.args().begin()) os << ", ";
+        os << "'" << *argiter<<"'";
+      }
+
+      os << "] requested by ";
+      helper_session_descr(os, session, user);
+      _INFO_(m_logsvc, os.str());
+    }
+
     resp = admin->invoke(req);
 
   }
@@ -440,8 +513,8 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   // sessions wants auto-close.
   if ( !exio::has_pending(resp.msg) and session.wants_autoclose() )
   {
-    _INFO_(m_logsvc, "Session will be closed: " << session.id()
-           << " - " << session.peeraddr());
+//    _INFO_(m_logsvc, "Session will be closed: " << session.id()
+//           << " - " << session.peeraddr());
     session.close_io();
   }
 }
@@ -520,7 +593,6 @@ void AdminInterfaceImpl::housekeeping()
          it != m_sessions.items.end(); ++it)
     {
       if (it->second->is_open()) it->second->housekeeping();
-
     }
   }
 }
@@ -969,7 +1041,7 @@ void AdminInterfaceImpl::session_info(SID sid,
   }
 }
 //----------------------------------------------------------------------
-AdminResponse AdminInterfaceImpl::admincmd_diag(AdminRequest& request)
+AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
 {
   AdminResponse resp(request.reqseqno);
 
@@ -982,21 +1054,25 @@ AdminResponse AdminInterfaceImpl::admincmd_diag(AdminRequest& request)
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
     os << "Total ever created: " << m_sessions.createdCount << "\n";
-    os << "Current count: " << m_sessions.items.size() << "\n";
-    os << "SessionID, PeerAddr, PeerServiceID, User, Logon\n";
+    os << "Active: " << m_sessions.items.size() << "\n";
+    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, Last, BytesOut, BytesIn\n";
     for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
            iter != m_sessions.items.end(); ++iter)
     {
-      os << "  " << iter->first << ", ";
+      os << iter->first << ", ";
       os << iter->second->peeraddr() << ", ";
       os << iter->second->peer_serviceid() << ", ";
       os << iter->second->username() << ", ";
       os << iter->second->logon_recevied() << ", ";
+      os << utils::datetimestamp(iter->second->start_time()) << ", ";
+      os << utils::datetimestamp(iter->second->last_write()) << ", ";
+      os << iter->second->bytes_out() << ", ";
+      os << iter->second->bytes_in() << ", ";
       os << "\n";
     }
   }
 
-  os << "\nThreads\n-------\n";
+  os << "\nexio threads\n------------\n";
 
   os << "server-socket: ";
   m_serverSocket.log_thread_ids(os); os << "\n";
@@ -1016,6 +1092,39 @@ AdminResponse AdminInterfaceImpl::admincmd_diag(AdminRequest& request)
   exio::add_rescode(resp.msg, 0);
   exio::set_pending(resp.msg, false);
 
+  exio::formatreply_string(resp.body(), os.str());
+
+  return resp;
+}
+
+//----------------------------------------------------------------------
+AdminResponse AdminInterfaceImpl::admincmd_table_subs(AdminRequest& request)
+{
+  AdminResponse resp(request.reqseqno);
+
+  std::ostringstream os;
+
+  std::list< std::string > tables = m_monitor.tables();
+  std::list< SID > subs;
+
+  for (std::list<std::string>::iterator i=tables.begin(); i!=tables.end(); ++i)
+  {
+    if (i != tables.begin()) os << "\n";
+    os << *i << ": ";
+
+    subs.clear();
+    m_monitor.table_subscribers(*i, subs);
+
+    for (std::list< SID >::iterator s = subs.begin(); s != subs.end(); ++s)
+    {
+      if (s != subs.begin()) os << ", ";
+      os << *s;
+    }
+
+  }
+
+  exio::add_rescode(resp.msg, 0);
+  exio::set_pending(resp.msg, false);
   exio::formatreply_string(resp.body(), os.str());
 
   return resp;

@@ -4,6 +4,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
+#include "config.h"
 
 #include "condition_variable.h"
 #include "mutex.h"
@@ -20,12 +21,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <getopt.h> /* for getopt_long; standard getopt is in unistd.h */
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
-
 
 // global level to control level of debugging
 int verbose = 0;
@@ -497,58 +498,132 @@ std::string build_service_id(const char* argv_0)
 }
 
 
-int main(const int argc, char** argv)
+//----------------------------------------------------------------------
+void usage()
 {
-  const char* addr = NULL;
-  const char* port = NULL;
-  try
-  {
+  std::cout << "Usage: admin [OPTION]... ADDRESS PORT [COMMAND] [ARG]...\n";
+  std::cout << "exio admin command-line client, version " PACKAGE_VERSION "\n\n";
 
-    int i = 1;
+  std::cout << "Options:\n\n";
+  std::cout << "  -v\tlog exio problems; repeat twice for info, thrice for debug\n";
+}
 
+//----------------------------------------------------------------------
+struct ProgramOptions
+{
+    std::string addr;
+    std::string port;
     std::string cmd;
     std::list< std::string > cmdargs;
 
-    while (i < argc)
+    int v; // count of '-v'
+
+    ProgramOptions()
+      : v(0)
     {
-      if (strcmp(argv[i], "-v") == 0)
-      {
-        verbose++;
+    }
+} program_options;
+
+//----------------------------------------------------------------------
+void process_cmd_line(int argc, char** argv)
+{
+
+/*
+          struct option {
+               const char *name;
+               int         has_arg;
+               int        *flag;
+               int         val;
+           };
+*/
+
+//  int digit_optind = 0;
+  static struct option longopts[] = {
+    {"help", no_argument, 0, 'h'},
+    {NULL, 0, NULL, 0}
+  };
+
+
+
+  while (true)
+  {
+    /* "optind" is the index of the next element to be processed in argv.  It
+       is defined in the getopts header, and the system initializes this value
+       to 1.  The caller can reset it to 1 to restart scanning of the same
+       argv, or when scanning a new argument vector. */
+
+    // take a copy to remember value for after return from getopt_long()
+    int this_option_optind = optind ? optind : 1;
+    int longindex = 0;
+
+      // 'c' is the option character returned
+    int c = getopt_long(argc, argv,
+                        "hv",
+                        longopts, &longindex);
+
+    if (c == -1) break;
+
+    // _P_( c );
+    // _P_(this_option_optind);
+    // _P_(optind);
+
+    switch(c)
+    {
+      case 'v' : program_options.v++; break;
+      case 'h' : usage(); exit(0);
+      case '?' : {
+        std::cout << "invalid option: '"
+                  << argv[this_option_optind]<<"'\n";
+        exit(1);
       }
-      else if (addr == NULL)
+      default:
       {
-        addr = argv[i];
-      }
-      else if (port == NULL)
-      {
-        port = argv[i];
-      }
-      else if (cmd.empty())
-      {
-        cmd = argv[i];
-      }
-      else
-      {
-        cmdargs.push_back( argv[i] );
+        std::cout << "getopt_long() returned (dec) " << (unsigned int)(c) << "\n";
+          exit(1);
       }
 
-      i++;
     }
 
-    if (!addr or !port) die("please specify address and port");
+  }
+
+  if (optind < argc) program_options.addr = argv[optind++];
+  if (optind < argc) program_options.port = argv[optind++];
+  if (optind < argc) program_options.cmd  = argv[optind++];
+  while (optind < argc) program_options.cmdargs.push_back(argv[optind++]);
+
+  if (program_options.addr.empty() or program_options.addr.empty())
+    die("please specify address and port");
+
+}
+
+//----------------------------------------------------------------------
+int main(const int argc, char** argv)
+{
+  try
+  {
+    process_cmd_line(argc,argv);
+
 
     // define application services required by exio objects
     exio::Config config;
 
     // TODO: allow the error level to be specified by config
-    exio::ConsoleLogger logger(exio::ConsoleLogger::eInfo);
+
+    exio::ConsoleLogger::Levels loglevel = exio::ConsoleLogger::eNone;
+    if (program_options.v > 0 ) loglevel = exio::ConsoleLogger::eWarn;
+    if (program_options.v > 1 ) loglevel = exio::ConsoleLogger::eInfo;
+    if (program_options.v > 2 ) loglevel = exio::ConsoleLogger::eAll;
+
+    exio::ConsoleLogger logger(exio::ConsoleLogger::eStderr, loglevel);
+
     exio::ConsoleLogger* logptr = &logger;
 
-    exio::AppSvc appsvc( config, &logger);
+    exio::AppSvc appsvc(config, &logger);
 
     /* Create a socket and connect */
 
-    int fd = connect_ipv4(addr, port);
+    int fd = connect_ipv4(program_options.addr.c_str(),
+                          program_options.port.c_str());
     if (!fd) return 1;
 
 #if defined (IP_TOS) && defined (IPTOS_LOWDELAY) && defined (IPPROTO_IP)
@@ -586,7 +661,7 @@ int main(const int argc, char** argv)
 
     AdminListener listener;
 
-    if (cmd.empty()) listener.show_unsol_messages(true);
+    if (program_options.cmd.empty()) listener.show_unsol_messages(true);
 
     exio::AdminSession adminsession(appsvc, fd, &listener);
 
@@ -599,7 +674,7 @@ int main(const int argc, char** argv)
     logon.root().put_field(exio::id::QN_serviceid, serviceid);
     logon.root().put_field(exio::id::QN_head_user, build_user_id());
 
-    if (not cmd.empty())
+    if (not program_options.cmd.empty())
     {
       /* because we are going to send a command, lets include the
        * no-automatic-subscription flag in the logon*/
@@ -614,7 +689,7 @@ int main(const int argc, char** argv)
     adminsession.enqueueToSend( logon );
 
 
-    if ( not cmd.empty() )
+    if ( not program_options.cmd.empty() )
     {
       /*
        * Generate a message to represent a command request
@@ -622,11 +697,11 @@ int main(const int argc, char** argv)
       sam::txMessage msg(exio::id::msg_request);
 
       // head
-      msg.root().put_field(exio::id::QN_command, cmd);
+      msg.root().put_field(exio::id::QN_command, program_options.cmd);
       sam::txContainer& head = msg.root().put_child(exio::id::head);
 
       std::ostringstream os;
-      os << addr << ":" <<port;
+      os << program_options.addr << ":" << program_options.port;
       head.put_field(exio::id::dest, os.str());
 
       head.put_field(exio::id::source, serviceid);
@@ -638,9 +713,9 @@ int main(const int argc, char** argv)
 
       // for legacy reasons, we also have to place the command into the messge
       // body
-      body.put_field(exio::id::command, cmd);
+      body.put_field(exio::id::command, program_options.cmd);
 
-      add_arguments(body, cmdargs);
+      add_arguments(body, program_options.cmdargs);
 
       adminsession.enqueueToSend( msg );
     }

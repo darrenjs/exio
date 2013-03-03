@@ -15,6 +15,14 @@ Work: new approach to snapshots
 ALL
 ---
 
+* [EASY] There are now two places where username is provided: at logon, and on
+  each command.  This is for legacy reasons.  However, if a useranem was
+  provided at logon, then we should not permit later admin commands to change
+  the username.  So when building teh AdminRequest, insert the username as a
+  member of the class, and, when constructing the AdminReqeust, check that
+  there is no difference between the session-username and command-username
+  (unless sessions-username was empty ... against, to support legacy GUIs).
+
 * [MEDIUM] Introduce provide AtomicInt & AtomicBool classes
 
 * [EASY] Allow it to be configured whether the RowLastUpdated is automatically

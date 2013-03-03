@@ -133,10 +133,13 @@ class AdminIO
     bool stopping() const;
     void request_stop();
 
-
     bool safe_to_delete() const;
 
-    time_t last_write() const { return m_last_write; }
+    // IO stats
+    time_t        last_write() const { return m_last_write; }
+    unsigned long bytes_out()  const { return m_bytesout; }
+    unsigned long bytes_in()   const { return m_bytesin; }
+
 
     int reader_lwp() const { return m_lwp.reader; }
     int writer_lwp() const { return m_lwp.writer; }
@@ -182,17 +185,18 @@ class AdminIO
 
     AtomicBool m_have_data;
 
+    // IO stats
+    unsigned long m_bytesout;
+    unsigned long m_bytesin;
+    time_t m_last_write;
+
+    bool m_log_io_events; // for debugging
+
     // always place member threads last, so that the get started after other
     // data is ready
     enum { NumberInternalThreads = 2 };
     cpp11::thread * m_read_thread;
     cpp11::thread * m_write_thread;
-
-    bool m_log_io_events; // for debugging
-
-    // IO stats
-    time_t m_last_write;
-    size_t m_total_out;
 
 };
 
