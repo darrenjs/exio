@@ -1081,9 +1081,9 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
     for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
          iter != m_sessions.items.end(); ++iter)
     {
+      if (iter != m_sessions.items.begin()) os << "\n";
       os << "session " << iter->first << ": ";
       iter->second->log_thread_ids(os);
-      os << "\n";
     }
   }
 
