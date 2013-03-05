@@ -105,6 +105,17 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
 
 void AdminInterfaceImpl::session_closed(AdminSession& session)
 {
+  /* Note in here we first remove any usage of the session, e.g., removing it
+   * from any subscriptions, before actually removing the sessions from the
+   * active list.  This ordering is important.  If we do it the other way, ie,
+   * remove from the active-list following by removing usage/subscriptions,
+   * the session can still be attempted to be used (eg used for sending table
+   * updates), which will lead to lots of warnings about session not found
+   * etc. */
+
+  // Remove session from any table subscriptions
+  m_monitor.unsubscribe_all( session.id() );
+
   // Remove the session from the active list
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
@@ -125,6 +136,7 @@ void AdminInterfaceImpl::session_closed(AdminSession& session)
         if (i->second == &session)
         {
           m_sessions.items.erase( i );
+          break;
         }
       }
     }
@@ -135,9 +147,6 @@ void AdminInterfaceImpl::session_closed(AdminSession& session)
     cpp11::lock_guard<cpp11::mutex> guard(m_expired_sessions.lock);
     m_expired_sessions.items[ session.id() ] = &session;
   }
-
-  // Remove session from any table subscriptions
-  m_monitor.unsubscribe_all( session.id() );
 
   _INFO_(m_logsvc,"Session " << session.id() << " closed");
 }
@@ -227,7 +236,7 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
   }
   else
   {
-    _WARN_(m_logsvc, "no session found " << id
+    _WARN_(m_logsvc, "session not found " << id
            << ", unable to send message: "
            << msg.type());
 
@@ -275,7 +284,7 @@ void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
   }
   else
   {
-    _WARN_(m_logsvc, "no session found " << id
+    _WARN_(m_logsvc, "session not found " << id
            << ", unable to send message list");
 
    // build a string of all the sessions
