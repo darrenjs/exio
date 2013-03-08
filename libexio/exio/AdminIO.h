@@ -159,9 +159,11 @@ class AdminIO
     unsigned long bytes_out()  const { return m_bytesout; }
     unsigned long bytes_in()   const { return m_bytesin; }
 
-
     int reader_lwp() const { return m_lwp.reader; }
     int writer_lwp() const { return m_lwp.writer; }
+
+    pthread_t reader_pth() const { return m_lwp.reader_pthread; }
+    pthread_t writer_pth() const { return m_lwp.writer_pthread; }
 
   private:
     AdminIO(const AdminIO&); // no copy
@@ -181,14 +183,15 @@ class AdminIO
     {
         int reader;
         int writer;
+        pthread_t reader_pthread;
+        pthread_t writer_pthread;
         AtomicInt count;
-        ThreadIDs():reader(0), writer(0), count(0) {}
+        ThreadIDs();
     } m_lwp;
 
     AppSvc& m_appsvc;
     Listener * m_listener;
     int m_fd;
-    bool m_session_valid;  // TODO: make atomic
 
     AtomicBool m_is_stopping;  // true if stopping
 

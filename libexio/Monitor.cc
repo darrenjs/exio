@@ -375,5 +375,16 @@ void Monitor::clear_table(const std::string& tablename)
     iter->second->clear_table();
   }
 }
+//----------------------------------------------------------------------
+size_t Monitor::table_size(const std::string& tablename)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  TableCollection::const_iterator iter = m_tables.find(tablename);
+
+  if (iter != m_tables.end())
+    return iter->second->size();
+  else
+    return 0;
+}
 
 } // namespace exio

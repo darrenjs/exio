@@ -56,6 +56,7 @@ class AdminServerSocket
     AdminInterfaceImpl* m_aii;
     int m_servfd;
     int m_threadid;
+    pthread_t m_pthreadid;
 
 //    qm::Thread m_acceptThr;
 };

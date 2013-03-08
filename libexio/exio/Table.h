@@ -77,8 +77,8 @@ class DataRow
         const std::string& value() const { return m_iter->second.value;}
 
       private:
-        iterator(Fields::iterator i) : m_iter(i) {}
-        Fields::iterator m_iter;
+        iterator(Fields::const_iterator i) : m_iter(i) {}
+        Fields::const_iterator m_iter;
 
         friend class DataRow;
     };
@@ -102,8 +102,8 @@ class DataRow
 
     void clear();
 
-    iterator           begin();
-    iterator           end();
+    iterator       begin() const;
+    iterator       end()   const;
 
   private:
 
@@ -168,6 +168,7 @@ class DataTable
     /* Publish snapshot to all subscribers */
     void snapshot();
 
+    size_t size() const;
   private:
 
 

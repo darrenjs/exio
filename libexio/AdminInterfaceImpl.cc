@@ -490,7 +490,6 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
     */
 
 
-    // TODO: need to build out the request object
     AdminRequest req( reqmsg,  session.id() );
 
     {
@@ -671,21 +670,14 @@ void AdminInterfaceImpl::createNewSession(int fd)
   session->log_thread_ids(os);
   _INFO_(m_appsvc.log(),  os.str() );
 
-  // Send a logon message to the new connection.
-
-  /* NOTE: the legacy ximon-gui does not send a logon message, which is way we
-   * sent a logon message here.  The admin client will send a logon message as
-   * soon as it establishes a socket connection.
-   */
-
-  // TODO: once the ximon is able to send logon kmessages first, then we won't
-  // do this until a logon has been received from the remote.
+  // Send a logon message to the new connection. Note that this is an
+  // unconditional event, ie we don't have to wait for thje client to send a
+  // logon message first.  This is okay, because all this serves to do is send
+  // some details about the server to the clienht.
   sam::txMessage logon(id::msg_logon);
 
   logon.root().put_field(id::QN_serviceid, m_appsvc.conf().serviceid);
   session->enqueueToSend( logon );
-
-  // TODO: what is the best way to modularise code for building logon message?
 }
 
 //----------------------------------------------------------------------
@@ -759,9 +751,6 @@ AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
          << min   << " mins, "
          << sec   << " secs";
 
-
-
-
   std::ostringstream os;
   os << "serviceid: " << m_svcid << "\n";
   os << "arch: " << sizeof(long)*8 << "\n";
@@ -783,12 +772,8 @@ AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
   hostname[sizeof(hostname)-1] = '\0';
   os << "host: " << hostname << "\n";
 
-
   // exio api version
   os << "exio-version: " << PACKAGE_VERSION;
-
-
-
 
   exio::add_rescode(resp.msg, 0);
   exio::set_pending(resp.msg, false);
@@ -920,8 +905,6 @@ void AdminInterfaceImpl::handle_logon_msg(const sam::txMessage& logonmsg,
    * functionality. */
   if ( logonmsg.root().check_field(QNAME(id::head, id::autoclose), id::True))
   {
-
-    //_INFO_(m_logsvc, "Setting session to autoclose");
     session.wants_autoclose(true);
   }
 
@@ -1115,7 +1098,27 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
     }
   }
 
-  // TODO: next add table information
+  std::list<SID> sids;
+  os << "\n\ntables\n------\n";
+
+  std::list< std::string > tables = m_monitor.tables();
+  for (std::list<std::string>::iterator t = tables.begin();
+       t != tables.end(); ++t)
+  {
+    sids.clear();
+    m_monitor.table_subscribers(*t, sids);
+    os << *t;
+    os << ": subs=[";
+    for (std::list<SID>::iterator i = sids.begin();
+         i != sids.end(); ++i)
+    {
+      if (i != sids.begin()) os << ", ";
+      os << *i;
+    }
+    os << "], size=" << m_monitor.table_size(*t);
+    os << "\n";
+  }
+
 
   exio::add_rescode(resp.msg, 0);
   exio::set_pending(resp.msg, false);

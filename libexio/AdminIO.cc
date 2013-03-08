@@ -74,6 +74,15 @@ namespace exio {
 //   return "unknown";
 // }
 
+//----------------------------------------------------------------------
+AdminIO::ThreadIDs::ThreadIDs()
+  : reader(0),
+    writer(0),
+    reader_pthread(0),
+    writer_pthread(0),
+    count(0)
+{
+}
 
 //----------------------------------------------------------------------
 /* Constructor */
@@ -81,7 +90,6 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, Listener * l)
   :  m_appsvc(appsvc),
      m_listener( l ),
      m_fd(fd),
-     m_session_valid(true),
      m_is_stopping( false ),
      m_threads_complete(0),
      m_have_data( false ),
@@ -158,6 +166,7 @@ bool read_timeo(int fd, int sec, int usec)
 void AdminIO::socket_read_TEP()
 {
   m_lwp.reader = syscall(SYS_gettid);
+  m_lwp.reader_pthread = pthread_self();
   m_lwp.count.incr();
 
   bool call_request_stop = true;
@@ -380,6 +389,7 @@ void AdminIO::wait_and_pop(QueuedItem& value)
 void AdminIO::socket_write_TEP()
 {
   m_lwp.writer = syscall(SYS_gettid);
+  m_lwp.writer_pthread = pthread_self();
   m_lwp.count.incr();
 
   try

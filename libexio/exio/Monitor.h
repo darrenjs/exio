@@ -97,6 +97,8 @@ class Monitor
 
     void broadcast_snapshot();
 
+    size_t table_size(const std::string& table_name);
+
   private:
     Monitor(const Monitor&); // no copy
     Monitor& operator=(const Monitor&); // no assignment

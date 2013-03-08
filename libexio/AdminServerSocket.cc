@@ -216,17 +216,18 @@ void AdminServerSocket::create_listen_socket()
 //----------------------------------------------------------------------
 void AdminServerSocket::log_thread_ids(std::ostream& os) const
 {
-  os << "accept (LWP " << m_threadid << ")";
+  os << "accept (LWP " << m_threadid
+     << " / pthread " << m_pthreadid << ")";
 }
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
-  m_threadid = syscall(SYS_gettid);
+  m_threadid  = syscall(SYS_gettid);
+  m_pthreadid = pthread_self();
   std::ostringstream os;
-  os << "Server socket thread starting";
+  os << "Server socket thread starting, thread: ";
 
-  // get the LWP ID of our thread - this is what appears in "ps" command
-  os << " (LWP " << m_threadid << ")";
+  log_thread_ids( os );
 
   _INFO_(m_aii->appsvc().log(), os.str() );
 

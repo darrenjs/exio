@@ -724,6 +724,29 @@ void DataTable::copy_subscribers(std::vector< SID > &subs) const
   }
 }
 
+//----------------------------------------------------------------------
+
+size_t DataTable::size() const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock ); // lock table
+
+  size_t s = 0;
+
+  for (std::vector< DataRow >::const_iterator r = m_rows.begin();
+       r != m_rows.end(); ++r)
+  {
+    DataRow::iterator i = r->begin();
+    DataRow::iterator e = r->end();
+    for (; i != e; ++i)
+    {
+      s += i.name().size() + i.value().size();
+    }
+
+  }
+
+  return s;
+}
+
 //======================================================================
 
 DataRow::DataRow(const std::string& rowkey,
@@ -735,13 +758,13 @@ DataRow::DataRow(const std::string& rowkey,
 }
 
 //----------------------------------------------------------------------
-DataRow::iterator DataRow::begin()
+DataRow::iterator DataRow::begin() const
 {
   return DataRow::iterator( m_fields.begin() );
 }
 
 //----------------------------------------------------------------------
-DataRow::iterator DataRow::end()
+DataRow::iterator DataRow::end() const
 {
   return DataRow::iterator( m_fields.end() );
 }

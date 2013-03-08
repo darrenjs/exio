@@ -152,8 +152,10 @@ AdminSession::~AdminSession()
 //----------------------------------------------------------------------
 void AdminSession::log_thread_ids(std::ostream& os) const
 {
-  os << "reader (LWP " << m_io->reader_lwp() << ") "
-     << "writer (LWP " << m_io->writer_lwp() << ")";
+  os << "reader (LWP " << m_io->reader_lwp()
+     << " / pthread " << m_io->reader_pth()  << ") "
+     << "writer (LWP " << m_io->writer_lwp()
+     << " / pthread " << m_io->writer_pth() << ")";
 }
 //----------------------------------------------------------------------
 
