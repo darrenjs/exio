@@ -32,7 +32,6 @@
 namespace exio
 {
 
-
   /* Helper functions for adding content to messages */
   void set_pending(sam::txMessage&, bool);
   bool has_pending(const sam::txMessage&);
@@ -94,10 +93,8 @@ class AdminError: public std::runtime_error
     int m_code;
 
   public:
-    AdminError(int __code, const std::string& s)
-      : std::runtime_error( s ),
-        m_code(__code){};
-
+    AdminError(int __code);
+    AdminError(int __code, const char* s);
     int code() const { return m_code; }
 };
 

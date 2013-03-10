@@ -28,6 +28,23 @@
 namespace exio {
 
 
+namespace id
+{
+
+  const char * error_code_str(int e)
+  {
+    switch (e)
+    {
+      case err_unknown         : return "unknown";
+      case err_admin_not_found : return "admin not found";
+      case err_no_table        : return "table not found";
+      case err_missing_arg     : return "missing args";
+      default                  : return "unknown error code";
+    }
+  }
+}
+
+
 std::map<std::string, std::string> const AdminCommand::EmptyAttrs
 = std::map<std::string, std::string>();
 
@@ -472,5 +489,20 @@ AdminResponse AdminCommand::invoke(AdminRequest& req)
   if (not m_target) throw std::runtime_error("command not implemented");
   return m_target->invoke( req );
 }
+
+//----------------------------------------------------------------------
+AdminError::AdminError(int __code)
+  : std::runtime_error( id::error_code_str(__code) ),
+    m_code(__code)
+{
+}
+
+//----------------------------------------------------------------------
+AdminError::AdminError(int __code, const char* s)
+  : std::runtime_error( s ),
+    m_code(__code)
+{
+}
+
 
 } // namespace qm

@@ -22,6 +22,7 @@
 #include "exio/Logger.h"
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
+#include "exio/utils.h"
 
 
 #include <sys/socket.h>
@@ -32,6 +33,10 @@
 #include <stdlib.h>
 
 namespace exio {
+
+
+SID SID::no_session = SID();
+
 
 struct AdminSessionIdGenerator
 {
@@ -64,6 +69,24 @@ std::string SID::toString() const
   os << m_unqiue_id << "." << m_fd;
   return os.str();
 }
+
+SID SID::fromString(const std::string& s)
+{
+  std::vector<std::string> parts = utils::tokenize(s.c_str(), '.',false);
+
+  if (parts.size() == 2)
+  {
+    SID retval;
+    retval.m_unqiue_id = atoll(parts[0].c_str());
+    retval.m_fd = atoi(parts[1].c_str());
+    return retval;
+  }
+  else
+  {
+    return no_session;
+  }
+}
+
 //----------------------------------------------------------------------
 SID::SID()
   : m_unqiue_id( 0 ),
@@ -244,7 +267,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 //----------------------------------------------------------------------
 
-void AdminSession::close_io()
+void AdminSession::close()
 {
   m_io->request_stop();
 }

@@ -105,9 +105,13 @@ namespace id  /* identifiers */
   static const std::string heartbeat    = "heartbeat";
 
   // error codes
-  static int const err_unknown = 1;
-  static int const err_admin_not_found = 2;
-  static int const err_no_table = 3;
+  static int const err_unknown          = 1;
+  static int const err_admin_not_found  = 2;
+  static int const err_no_table         = 3;
+  static int const err_missing_arg      = 4;
+
+  const char * error_code_str(int);
+
 } // namespace id
 
 } // namespace exio

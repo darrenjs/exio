@@ -35,6 +35,9 @@ struct sid_desc
 class SID
 {
   public:
+
+    static SID no_session;
+
     SID();  // default value represents invalid session ID
 
     SID(unsigned long long id,
@@ -46,6 +49,13 @@ class SID
         and  (this->m_fd == rhs.m_fd);
     }
 
+    bool operator!=(SID rhs) const
+    {
+      return (this->m_unqiue_id != rhs.m_unqiue_id)
+        or   (this->m_fd        != rhs.m_fd);
+    }
+
+
     bool operator<(SID rhs) const
     {
       return
@@ -56,6 +66,8 @@ class SID
 
     // Textual description of the connection address
     std::string toString() const;
+
+    static SID fromString(const std::string&);
 
   private:
     unsigned long long  m_unqiue_id;

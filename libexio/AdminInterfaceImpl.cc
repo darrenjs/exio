@@ -99,6 +99,12 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           "list subscribers for each table", "",
                           &AdminInterfaceImpl::admincmd_table_subs, this,
                           adminattrs) );
+
+  admin_add( AdminCommand("drop_session",
+                          "force a session disconnect", "",
+                          &AdminInterfaceImpl::admincmd_del_session, this,
+                          adminattrs) );
+
 }
 
 //----------------------------------------------------------------------
@@ -295,9 +301,7 @@ void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
       os << iter->first;
     }
     _INFO_(m_logsvc, "Current sessions: " << os.str());
-
   }
-
 }
 
 //----------------------------------------------------------------------
@@ -353,8 +357,11 @@ void AdminInterfaceImpl::session_stop_one(const SID& id)
   std::map< SID, AdminSession* >::iterator iter =
     m_sessions.items.find( id );
 
-  // TODO: call session close method here
-//  if (iter != m_sessions.items.end()) iter->second->close_safe();
+  if (iter != m_sessions.items.end())
+  {
+    _INFO_(m_logsvc, "closing session " << id);
+    iter->second->close();
+  }
 }
 
 //----------------------------------------------------------------------
@@ -456,7 +463,7 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
       helper_session_descr(os, session, user);
       _WARN_(m_logsvc, os.str());
 
-      throw AdminError(id::err_admin_not_found, "invalid admin request");
+      throw AdminError(id::err_admin_not_found);
     }
 
     // try to find a matching admin
@@ -468,7 +475,7 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
       helper_session_descr(os, session, user);
       _WARN_(m_logsvc, os.str());
 
-      throw AdminError(id::err_admin_not_found, "command not recognised");
+      throw AdminError(id::err_admin_not_found);
     }
 
     /*
@@ -540,9 +547,7 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   // sessions wants auto-close.
   if ( !exio::has_pending(resp.msg) and session.wants_autoclose() )
   {
-//    _INFO_(m_logsvc, "Session will be closed: " << session.id()
-//           << " - " << session.peeraddr());
-    session.close_io();
+    session.close();
   }
 }
 
@@ -1151,7 +1156,6 @@ AdminResponse AdminInterfaceImpl::admincmd_table_subs(AdminRequest& request)
       if (s != subs.begin()) os << ", ";
       os << *s;
     }
-
   }
 
   exio::add_rescode(resp.msg, 0);
@@ -1160,6 +1164,48 @@ AdminResponse AdminInterfaceImpl::admincmd_table_subs(AdminRequest& request)
 
   return resp;
 }
+
+//----------------------------------------------------------------------
+AdminResponse AdminInterfaceImpl::admincmd_del_session(AdminRequest& req)
+{
+  AdminResponse resp(req.reqseqno);
+
+  if (req.args().size() == 0) throw AdminError(id::err_missing_arg);
+
+
+  std::list<SID> sessions_stopped;
+
+  typename AdminRequest::Args::const_iterator iter;
+  for (iter = req.args().begin(); iter != req.args().end(); ++iter)
+  {
+    SID s  = SID::fromString( *iter );
+    if (s != SID::no_session and session_exists(s))
+    {
+      sessions_stopped.push_back(s);
+      session_stop_one( s );
+    }
+  }
+
+  std::ostringstream os;
+  os << "sessions stopping: ";
+  for (std::list<SID>::iterator i = sessions_stopped.begin();
+       i != sessions_stopped.end(); ++i)
+  {
+    if (i != sessions_stopped.begin()) os << ", ";
+    os << *i;
+  }
+
+  exio::add_rescode(resp.msg, 0);
+  exio::set_pending(resp.msg, false);
+  exio::formatreply_string(resp.body(), os.str());
+
+  return resp;
+}
+
+//----------------------------------------------------------------------
+
+
+
 
 
 } // namespace exio

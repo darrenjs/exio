@@ -135,6 +135,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
     AdminResponse admincmd_snapshot(AdminRequest& r);
     AdminResponse admincmd_diags(AdminRequest& r);
     AdminResponse admincmd_table_subs(AdminRequest& r);
+    AdminResponse admincmd_del_session(AdminRequest& r);
 
     void handle_logon_msg(const sam::txMessage&, AdminSession&);
     void session_cleanup();

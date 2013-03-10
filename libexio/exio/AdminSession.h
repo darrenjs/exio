@@ -66,7 +66,8 @@ class AdminSession : public AdminIO::Listener
      * returns value indicates encoding or IO problem. */
     bool enqueueToSend(const sam::txMessage&);
 
-    void close_io();
+    /* Request session to close */
+    void close();
 
     bool is_open() const { return m_session_valid; }
 
