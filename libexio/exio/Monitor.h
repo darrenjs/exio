@@ -95,9 +95,10 @@ class Monitor
 
     void unsubscribe_all(const SID&);
 
+    void broadcast_snapshot(const std::string& tablename);
     void broadcast_snapshot();
 
-    size_t table_size(const std::string& table_name);
+    size_t table_size(const std::string& tablename);
 
   private:
     Monitor(const Monitor&); // no copy

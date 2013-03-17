@@ -682,7 +682,7 @@ int main(const int argc, char** argv)
 
     if (program_options.cmd.empty()) listener.show_unsol_messages(true);
 
-    exio::AdminSession adminsession(appsvc, fd, &listener);
+    exio::AdminSession adminsession(appsvc, fd, &listener, 1);
 
     // Generate a logon message
 

@@ -59,7 +59,8 @@ class AdminSession : public AdminIO::Listener
   public:
     AdminSession(AppSvc&,
                  int fd,
-                 Listener* l);
+                 Listener* l,
+                 size_t id);
     ~AdminSession();
 
     /* Error code indicates success.  Zero/false means no error.  Other

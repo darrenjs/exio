@@ -359,9 +359,18 @@ void Monitor::broadcast_snapshot()
   {
     DataTable* table = it->second;
     table->snapshot();
-
   }
 }
+
+//----------------------------------------------------------------------
+void Monitor::broadcast_snapshot(const std::string& tablename)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  TableCollection::const_iterator iter = m_tables.find(tablename);
+
+  if (iter != m_tables.end()) iter->second->snapshot();
+}
+
 //----------------------------------------------------------------------
 void Monitor::clear_table(const std::string& tablename)
 {

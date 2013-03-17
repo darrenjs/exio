@@ -40,28 +40,32 @@ class SID
 
     SID();  // default value represents invalid session ID
 
-    SID(unsigned long long id,
-       int fd);
+    SID(size_t id);
+//    SID(unsigned long long id,
+//       int fd);
 
     bool operator==(SID rhs) const
     {
-      return (this->m_unqiue_id == rhs.m_unqiue_id)
-        and  (this->m_fd == rhs.m_fd);
+      return (this->m_unqiue_id == rhs.m_unqiue_id);
+//      return (this->m_unqiue_id == rhs.m_unqiue_id)
+//        and  (this->m_fd == rhs.m_fd);
     }
 
     bool operator!=(SID rhs) const
     {
-      return (this->m_unqiue_id != rhs.m_unqiue_id)
-        or   (this->m_fd        != rhs.m_fd);
+      return (this->m_unqiue_id != rhs.m_unqiue_id);
+//      return (this->m_unqiue_id != rhs.m_unqiue_id)
+//        or   (this->m_fd        != rhs.m_fd);
     }
 
 
     bool operator<(SID rhs) const
     {
-      return
-        (this->m_unqiue_id < rhs.m_unqiue_id)
-        or
-        (this->m_unqiue_id == rhs.m_unqiue_id and this->m_fd < rhs.m_fd);
+      return this->m_unqiue_id < rhs.m_unqiue_id;
+//      return
+//        (this->m_unqiue_id < rhs.m_unqiue_id)
+//        or
+//        (this->m_unqiue_id == rhs.m_unqiue_id and this->m_fd < rhs.m_fd);
     }
 
     // Textual description of the connection address
@@ -69,9 +73,11 @@ class SID
 
     static SID fromString(const std::string&);
 
+    size_t unique_id() const { return m_unqiue_id; }
+
   private:
-    unsigned long long  m_unqiue_id;
-    int m_fd;
+    size_t  m_unqiue_id;
+//    int m_fd;
 };
 
 

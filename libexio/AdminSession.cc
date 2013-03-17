@@ -66,41 +66,56 @@ std::ostream& operator<<(std::ostream& os, const SID& id)
 std::string SID::toString() const
 {
   std::ostringstream os;
-  os << m_unqiue_id << "." << m_fd;
+  os << m_unqiue_id;
+//  os << m_unqiue_id << "." << m_fd;
   return os.str();
 }
 
 SID SID::fromString(const std::string& s)
 {
-  std::vector<std::string> parts = utils::tokenize(s.c_str(), '.',false);
+  SID retval;
+  retval.m_unqiue_id = atoi( s.c_str() );
 
-  if (parts.size() == 2)
-  {
-    SID retval;
-    retval.m_unqiue_id = atoll(parts[0].c_str());
-    retval.m_fd = atoi(parts[1].c_str());
-    return retval;
-  }
-  else
-  {
-    return no_session;
-  }
+  // std::vector<std::string> parts = utils::tokenize(s.c_str(), '.',false);
+
+  // if (parts.size() == 2)
+  // {
+  //   SID retval;
+  //   retval.m_unqiue_id = atoll(parts[0].c_str());
+  //   retval.m_fd = atoi(parts[1].c_str());
+  //   return retval;
+  // }
+  // else
+  // {
+  //   return no_session;
+  // }
+
+  return retval;
 }
 
 //----------------------------------------------------------------------
 SID::SID()
-  : m_unqiue_id( 0 ),
-    m_fd ( 0 )
+  : m_unqiue_id( 0 )
 {
-  // TODO: I want to make the ID to be even safer.  So add some extra fields:  port and time
 }
 
-SID::SID(unsigned long long id,
-         int fd)
-  : m_unqiue_id( id ),
-    m_fd ( fd )
+SID::SID(size_t id)
+  : m_unqiue_id( id )
 {
 }
+
+// SID::SID()
+//   : m_unqiue_id( 0 ),
+//     m_fd ( 0 )
+// {
+// }
+
+// SID::SID(unsigned long long id,
+//          int fd)
+//   : m_unqiue_id( id ),
+//     m_fd ( fd )
+// {
+// }
 
 /*
  * Taken from Unix Network Programming, section 3.8.  Look up sock_ntop.c for
@@ -148,9 +163,11 @@ std::string sock_descr(int fd)
 //----------------------------------------------------------------------
 AdminSession::AdminSession(AppSvc& appsvc,
                            int fd,
-                           AdminSession::Listener* l)
+                           AdminSession::Listener* l,
+                           size_t id)
   : m_appsvc( appsvc),
-    m_id(AdminSessionIdGenerator::next_admin_sessionid(), fd),
+    m_id(id),
+//    m_id(AdminSessionIdGenerator::next_admin_sessionid(), fd),
     m_logon_received(false),
     m_session_valid(true),
     m_peeraddr( sock_descr(fd) ),

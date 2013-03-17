@@ -172,5 +172,15 @@ void AdminInterface::session_info(SID sid, sid_desc& sd, bool& sf) const
   m_impl->session_info(sid, sd, sf);
 }
 //----------------------------------------------------------------------
+void AdminInterface::monitor_snapshot(const std::string& tablename)
+{
+  m_impl->monitor_snapshot(tablename);
+}
+//----------------------------------------------------------------------
+void AdminInterface::monitor_snapshot()
+{
+  m_impl->monitor_snapshot();
+}
 
+//----------------------------------------------------------------------
 }

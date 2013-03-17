@@ -88,6 +88,9 @@ class AdminInterface
 
     void clear_table(const std::string& tablename);
 
+    void monitor_snapshot(const std::string& tablename);
+    void monitor_snapshot();
+
     void monitor_update(const std::string& tablename,
                         const std::string& rowkey,
                         const std::map<std::string, std::string>& fields);
@@ -101,6 +104,8 @@ class AdminInterface
                        const std::string& source_type,
                        const std::string& error_str,
                        const std::string& alert_type);
+
+
 
   private:
 

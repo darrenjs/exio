@@ -47,6 +47,14 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
     m_start_time( ::time(NULL) )
 {
   m_sessions.createdCount = 0;
+  m_sessions.next = 1;
+
+  /* Reset the session registry */
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+  {
+    SessionReg::reset(&(m_sessions.reg[i]));
+  }
+
 
   /*
    * NOTE: design principle here: we should not add admins which modify table
@@ -126,60 +134,69 @@ void AdminInterfaceImpl::session_closed(AdminSession& session)
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-    std::map< SID, AdminSession* >::iterator i =
-      m_sessions.items.find( session.id() );
+    // free the slot
+    SessionReg::reset( &( m_sessions.reg[session.id().unique_id()]) );
 
-    if ( i != m_sessions.items.end() )
-    {
-      m_sessions.items.erase( i );
-    }
-    else
-    {
-      /* oh dear, we failed to find our session based on lookup. now lets try
-       * searching for its address */
-      for (i=m_sessions.items.begin(); i != m_sessions.items.end(); ++i)
-      {
-        if (i->second == &session)
-        {
-          m_sessions.items.erase( i );
-          break;
-        }
-      }
-    }
+    // std::map< SID, AdminSession* >::iterator i =
+    //   m_sessions.items.find( session.id() );
+
+    // if ( i != m_sessions.items.end() )
+    // {
+    //   m_sessions.items.erase( i );
+    // }
+    // else
+    // {
+    //   /* oh dear, we failed to find our session based on lookup. now lets try
+    //    * searching for its address */
+    //   for (i=m_sessions.items.begin(); i != m_sessions.items.end(); ++i)
+    //   {
+    //     if (i->second == &session)
+    //     {
+    //       m_sessions.items.erase( i );
+    //       break;
+    //     }
+    //   }
+    // }
   }
 
-  // Now add the session to the expired list
+  // Now add the session to the expired list. First take a copy of the
+  // session-id of the session being closed, because we don't know for how
+  // long the session object itself will remain valid, i.e., it could be
+  // deleted immediately following the exit of the following critical section.
+  SID sessionidclosed = session.id();
+
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_expired_sessions.lock);
-    m_expired_sessions.items[ session.id() ] = &session;
+    m_expired_sessions.items.push_back( &session );
   }
 
-  _INFO_(m_logsvc,"Session " << session.id() << " closed");
+  _INFO_(m_logsvc,"Session " << sessionidclosed << " closed");
 }
 
 //----------------------------------------------------------------------
 void AdminInterfaceImpl::session_cleanup()
 {
-  std::map< SID, AdminSession* > delete_later;
+  std::list< AdminSession* > delete_later;
 
   cpp11::lock_guard<cpp11::mutex> guard(m_expired_sessions.lock);
 
-  for (std::map< SID, AdminSession* >::iterator i =
+  for (std::list< AdminSession* >::iterator i =
          m_expired_sessions.items.begin();
        i != m_expired_sessions.items.end(); ++i)
   {
+    AdminSession* s = *i;
     try
     {
-      if ( i->second->safe_to_delete() )
+      if ( s->safe_to_delete() )
       {
 //        _INFO_(m_logsvc, "Deleting session " << i->second->id() );
-        delete i->second;
+        delete s;
 
         // LESSON: I used to reset the iterator to begin(), but sometimes
         // failed...
       }
       else
-        delete_later[ i->first ] = i->second;
+        delete_later.push_back( s );
     }
     catch (...)
     {
@@ -199,7 +216,15 @@ void AdminInterfaceImpl::session_cleanup()
 size_t AdminInterfaceImpl::session_count() const
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-  return m_sessions.items.size();
+
+  size_t count = 0;
+
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+  {
+    if (m_sessions.reg[i].used()) count++;
+  }
+
+  return count;
 }
 
 //----------------------------------------------------------------------
@@ -208,25 +233,11 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  std::map<SID, AdminSession*>::iterator iter;
+  SessionReg& sreg = m_sessions.reg[ id.unique_id() ];
 
-
-
-
-  // NOTE: use this logging section when debugging admin sessions that
-  // disconnected but we are still trying sending messages to
-
-  // for (iter = m_sessions.items.begin();
-  //      iter != m_sessions.items.end(); ++iter)
-  // {
-  //   _INFO_( "Active session: " << iter->first );
-  // }
-
-  iter = m_sessions.items.find(id);
-
-  if (iter != m_sessions.items.end())
+  if (sreg.used())
   {
-    AdminSession * session = iter->second;
+    AdminSession * session = sreg.ptr;
 
     // Note: it is better to perform the session enqueue inside the lock so
     // that we avoid the race condition where a session is being removed
@@ -246,17 +257,16 @@ void AdminInterfaceImpl::send_one(const sam::txMessage& msg,
            << ", unable to send message: "
            << msg.type());
 
-    // build a string of all the sessions
-    std::ostringstream os;
-    for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
-    {
-      if (iter != m_sessions.items.begin()) os << ", ";
-      os << iter->first;
-    }
-    _INFO_(m_logsvc, "Current sessions: " << os.str());
-
+    // TODO: create a method for building a string of current sessions IDs
+//    // build a string of all the sessions
+//    std::ostringstream os;
+//    for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
+//    {
+//      if (iter != m_sessions.items.begin()) os << ", ";
+//      os << iter->first;
+//    }
+//    _INFO_(m_logsvc, "Current sessions: " << os.str());
   }
-
 }
 //----------------------------------------------------------------------
 void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
@@ -264,12 +274,11 @@ void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  std::map<SID, AdminSession*>::iterator iter
-    = m_sessions.items.find(id);
+  SessionReg& sreg = m_sessions.reg[ id.unique_id() ];
 
-  if (iter != m_sessions.items.end())
+  if (sreg.used())
   {
-    AdminSession * session = iter->second;
+    AdminSession * session = sreg.ptr;
 
     // Note: it is better to perform the session enqueue inside the lock so
     // that we avoid the race condition where a session is being removed
@@ -293,14 +302,15 @@ void AdminInterfaceImpl::send_one(const std::list<sam::txMessage>& msgs,
     _WARN_(m_logsvc, "session not found " << id
            << ", unable to send message list");
 
-   // build a string of all the sessions
-    std::ostringstream os;
-    for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
-    {
-      if (iter != m_sessions.items.begin()) os << ", ";
-      os << iter->first;
-    }
-    _INFO_(m_logsvc, "Current sessions: " << os.str());
+    // TODO: see above TODO, above a method for building a session list
+  //  // build a string of all the sessions
+  //   std::ostringstream os;
+  //   for (iter=m_sessions.items.begin(); iter != m_sessions.items.end(); ++iter)
+  //   {
+  //     if (iter != m_sessions.items.begin()) os << ", ";
+  //     os << iter->first;
+  //   }
+  //   _INFO_(m_logsvc, "Current sessions: " << os.str());
   }
 }
 
@@ -309,14 +319,23 @@ void AdminInterfaceImpl::send_all(const sam::txMessage& msg)
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
-       it != m_sessions.items.end(); ++it)
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
   {
-    if (it->second->is_open())
+    if ( m_sessions.reg[i].used() and
+         m_sessions.reg[i].ptr->is_open())
     {
-      it->second->enqueueToSend( msg );
+      m_sessions.reg[i].ptr->enqueueToSend( msg );
     }
   }
+
+  // for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
+  //      it != m_sessions.items.end(); ++it)
+  // {
+  //   if (it->second->is_open())
+  //   {
+  //     it->second->enqueueToSend( msg );
+  //   }
+  // }
 }
 
 //----------------------------------------------------------------------
@@ -326,23 +345,30 @@ bool AdminInterfaceImpl::session_exists(const SID& id) const
   // sessions while we searching.
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  return m_sessions.items.find( id ) != m_sessions.items.end();
+  size_t index = id.unique_id();
+  return m_sessions.reg[ index ].used();
+
+//  return m_sessions.items.find( id ) != m_sessions.items.end();
 }
 
 //----------------------------------------------------------------------
 void AdminInterfaceImpl::session_list(std::list< SID > & l) const
 {
-  // Grab the lock, so that other threads cannot update the collection of
-  // sessions while we are iterating through it.
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  for (std::map< SID, AdminSession*>::iterator iter
-         = m_sessions.items.begin();
-       iter != m_sessions.items.end(); ++iter)
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
   {
-    AdminSession* s = iter->second;
-    l.push_back( s->id() );
+    if (m_sessions.reg[i].used())
+      l.push_back( m_sessions.reg[i].ptr->id() );
   }
+
+  // for (std::map< SID, AdminSession*>::iterator iter
+  //        = m_sessions.items.begin();
+  //      iter != m_sessions.items.end(); ++iter)
+  // {
+  //   AdminSession* s = iter->second;
+  //   l.push_back( s->id() );
+  // }
 }
 
 //----------------------------------------------------------------------
@@ -354,14 +380,23 @@ void AdminInterfaceImpl::session_stop_one(const SID& id)
   // another thread.
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  std::map< SID, AdminSession* >::iterator iter =
-    m_sessions.items.find( id );
 
-  if (iter != m_sessions.items.end())
+  size_t index = id.unique_id();
+
+  if (m_sessions.reg[index].used())
   {
     _INFO_(m_logsvc, "closing session " << id);
-    iter->second->close();
+    m_sessions.reg[index].ptr->close();
   }
+
+  // std::map< SID, AdminSession* >::iterator iter =
+  //   m_sessions.items.find( id );
+
+  // if (iter != m_sessions.items.end())
+  // {
+  //   _INFO_(m_logsvc, "closing session " << id);
+  //   iter->second->close();
+  // }
 }
 
 //----------------------------------------------------------------------
@@ -373,13 +408,10 @@ void AdminInterfaceImpl::session_stop_all()
   // another thread.
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  for (std::map<SID, AdminSession*>::iterator iter = m_sessions.items.begin();
-       iter != m_sessions.items.end(); ++iter)
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
   {
-//    AdminSession* s = iter->second;
-
-    // TODO: call a session close method here
-//    s->close_safe();
+    if (m_sessions.reg[i].used())
+      m_sessions.reg[i].ptr->close();
   }
 }
 
@@ -618,15 +650,23 @@ void AdminInterfaceImpl::housekeeping()
   session_cleanup();
 
   // Now heartbeat on each session
-  {
-    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+  cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-    for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
-         it != m_sessions.items.end(); ++it)
+
+  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+  {
+    if (m_sessions.reg[i].used() and
+        m_sessions.reg[i].ptr->is_open())
     {
-      if (it->second->is_open()) it->second->housekeeping();
+      m_sessions.reg[i].ptr->housekeeping();
     }
   }
+
+  // for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
+  //      it != m_sessions.items.end(); ++it)
+  // {
+  //   if (it->second->is_open()) it->second->housekeeping();
+  // }
 }
 
 //----------------------------------------------------------------------
@@ -640,11 +680,42 @@ start_thread () from /lib/x86_64-linux-gnu/libpthread.so.0
 */
 void AdminInterfaceImpl::createNewSession(int fd)
 {
+  // Serialise access to the create new session operation.  We do this so that
+  // we avoid the situation there a free slot on the session registry array is
+  // not simultaneously claimed more than once.
+  cpp11::lock_guard<cpp11::mutex> guard(m_create_session_lock);
+
   // TODO perform these steps individually, and catch and throw exception.
   // TODO: basically, if the second step fails, adding to the list, we
   // must close the session straigth away -- but, don't throw is closing a
   // valid session, because we don't want the called to think the socket
   // needs to be closed.
+
+  // Attempt to find a spare session row
+  size_t session_index = 0;
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+    for (size_t i = 0; i < SESSION_REG_SIZE and session_index == 0; ++i)
+    {
+      // Is 'next' available?
+      if (m_sessions.next != 0 and
+          not m_sessions.reg[m_sessions.next].used())
+      {
+         session_index = m_sessions.next;
+      }
+
+      // move on
+      if (++m_sessions.next > MAX_SESSIONS) m_sessions.next=0;
+    }
+  }
+
+  if (session_index == 0) throw std::runtime_error("no more sessions allowed");
+
+  {
+    std::ostringstream os;
+    os << "new session allocated ID " << session_index;
+    _INFO_(m_appsvc.log(),  os.str() );
+  }
 
   AdminSession* session = NULL;
 
@@ -657,12 +728,13 @@ void AdminInterfaceImpl::createNewSession(int fd)
     // the session ID has been registered; that can result in session ID
     // lookups failing, meaning that replies to such race-condition messages
     // go unsent.
-    session = new AdminSession(m_appsvc, fd, this);
+    session = new AdminSession(m_appsvc, fd, this, session_index);
 
     // TODO: here I need to check that the ID is unique. If not, I could try
     // creating a new unique ID, or, reject the connection.
 
-    m_sessions.items[ session->id() ] = session;
+    m_sessions.reg[ session_index ].ptr = session;
+    // m_sessions.items[ session->id() ] = session;
     m_sessions.createdCount++;
   }
 
@@ -729,7 +801,7 @@ AdminResponse AdminInterfaceImpl::admincmd_snapshot(
   AdminRequest& request)
 {
   m_monitor.broadcast_snapshot();
-  return AdminResponse::success(request.reqseqno);
+  return AdminResponse::success(request.reqseqno, "snapshot broadcast");
 }
 //----------------------------------------------------------------------
 AdminResponse AdminInterfaceImpl::admincmd_info(AdminRequest& request)
@@ -820,10 +892,16 @@ AdminResponse AdminInterfaceImpl::admincmd_sessions(
     std::string serviceid="";
     {
       cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-      std::map<SID, AdminSession*>::iterator sesit = m_sessions.items.find(*s);
-      if (sesit != m_sessions.items.end())
-        serviceid = sesit->second->peer_serviceid();
-    };
+
+      if (m_sessions.reg[ s->unique_id() ].used())
+      {
+        serviceid = m_sessions.reg[s->unique_id()].ptr->peer_serviceid();
+
+//        std::map<SID, AdminSession*>::iterator sesit = m_sessions.items.find(*s);
+//        if (sesit != m_sessions.items.end())
+//          serviceid = sesit->second->peer_serviceid();
+      };
+    }
     values.push_back( s->toString() ); // "sessionid"
     values.push_back( serviceid ); // "serviceid"
 
@@ -1041,19 +1119,19 @@ void AdminInterfaceImpl::session_info(SID sid,
 {
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  std::map< SID, AdminSession* >::const_iterator iter =
-    m_sessions.items.find(sid);
+  const SessionReg& sreg = m_sessions.reg[ sid.unique_id() ];
 
-  if (iter == m_sessions.items.end())
+  if ( sreg.used() )
   {
-    found = false;
-    return;
+
+    found = true;
+    sd.username = sreg.ptr->username();
+    sd.peeraddr = sreg.ptr->peeraddr();
   }
   else
   {
-    found = true;
-    sd.username = iter->second->username();
-    sd.peeraddr = iter->second->peeraddr();
+    // session not found
+    found = false;
   }
 }
 //----------------------------------------------------------------------
@@ -1070,20 +1148,28 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
     os << "Total ever created: " << m_sessions.createdCount << "\n";
-    os << "Active: " << m_sessions.items.size() << "\n";
+
+    size_t count = 0;
+    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+      if (m_sessions.reg[i].used()) count++;
+
+    os << "Active: " <<  count << "\n";
     os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, Last, BytesOut, BytesIn\n";
-    for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
-           iter != m_sessions.items.end(); ++iter)
+
+    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
     {
-      os << iter->first << ", ";
-      os << iter->second->peeraddr() << ", ";
-      os << iter->second->peer_serviceid() << ", ";
-      os << iter->second->username() << ", ";
-      os << iter->second->logon_recevied() << ", ";
-      os << utils::datetimestamp(iter->second->start_time()) << ", ";
-      os << utils::datetimestamp(iter->second->last_write()) << ", ";
-      os << iter->second->bytes_out() << ", ";
-      os << iter->second->bytes_in() << ", ";
+      if (not m_sessions.reg[i].used()) continue;
+      AdminSession* sptr = m_sessions.reg[i].ptr;
+
+      os << sptr->id() << ", ";
+      os << sptr->peeraddr() << ", ";
+      os << sptr->peer_serviceid() << ", ";
+      os << sptr->username() << ", ";
+      os << sptr->logon_recevied() << ", ";
+      os << utils::datetimestamp(sptr->start_time()) << ", ";
+      os << utils::datetimestamp(sptr->last_write()) << ", ";
+      os << sptr->bytes_out() << ", ";
+      os << sptr->bytes_in() << ", ";
       os << "\n";
     }
   }
@@ -1094,13 +1180,26 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
   m_serverSocket.log_thread_ids(os); os << "\n";
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-    for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
-         iter != m_sessions.items.end(); ++iter)
+
+    bool append_delim = false;
+    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
     {
-      if (iter != m_sessions.items.begin()) os << "\n";
-      os << "session " << iter->first << ": ";
-      iter->second->log_thread_ids(os);
+      if (m_sessions.reg[i].used())
+      {
+        if (append_delim) os << "\n";
+        os << "session " << m_sessions.reg[i].ptr->id() << ": ";
+        m_sessions.reg[i].ptr->log_thread_ids(os);
+        append_delim = true;
+      }
     }
+
+  //   for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
+  //        iter != m_sessions.items.end(); ++iter)
+  //   {
+  //     if (iter != m_sessions.items.begin()) os << "\n";
+  //     os << "session " << iter->first << ": ";
+  //     iter->second->log_thread_ids(os);
+  //   }
   }
 
   std::list<SID> sids;
@@ -1203,9 +1302,14 @@ AdminResponse AdminInterfaceImpl::admincmd_del_session(AdminRequest& req)
 }
 
 //----------------------------------------------------------------------
-
-
-
-
+void AdminInterfaceImpl::monitor_snapshot(const std::string& tablename)
+{
+  m_monitor.broadcast_snapshot(tablename);
+}
+//----------------------------------------------------------------------
+void AdminInterfaceImpl::monitor_snapshot()
+{
+  m_monitor.broadcast_snapshot();
+}
 
 } // namespace exio

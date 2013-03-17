@@ -25,11 +25,28 @@
 #include "exio/AdminCommand.h"
 #include "exio/AdminServerSocket.h"
 
+#include <string.h>
+
+#define MAX_SESSIONS 1000
+#define SESSION_REG_SIZE (MAX_SESSIONS+1)
+
 namespace exio {
 
 class Config;
 class LogService;
 class AdminInterfaceObserver;
+
+struct SessionReg
+{
+    AdminSession* ptr;
+
+
+    bool used() const { return ptr != NULL; }
+    static void reset(SessionReg* reg)
+    {
+      memset(reg, 0, sizeof(SessionReg));
+    }
+};
 
 class AdminInterfaceImpl : public AdminSession::Listener
 {
@@ -107,6 +124,9 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
     void clear_table(const std::string& tablename);
 
+    void monitor_snapshot(const std::string& tablename);
+    void monitor_snapshot();
+
     void monitor_update(const std::string& table_name,
                         const std::string& rowkey,
                         const std::map<std::string, std::string>& fields);
@@ -157,13 +177,19 @@ class AdminInterfaceImpl : public AdminSession::Listener
     mutable struct
     {
         unsigned long createdCount;
-        std::map< SID, AdminSession* > items;
+//        std::map< SID, AdminSession* > items;
         cpp11::mutex lock;
+
+        /* valid indexed are: 1 to MAX_SESSIONS */
+        SessionReg reg[SESSION_REG_SIZE];
+        size_t next;
+
     } m_sessions;
 
     mutable struct
     {
-        std::map< SID, AdminSession* > items;
+
+        std::list< AdminSession* > items;
         cpp11::mutex lock;
     } m_expired_sessions;
 
@@ -177,6 +203,8 @@ class AdminInterfaceImpl : public AdminSession::Listener
     Monitor m_monitor;
 
     time_t m_start_time;
+
+    mutable cpp11::mutex m_create_session_lock;
 };
 
 } // namespace exio
