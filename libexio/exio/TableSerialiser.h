@@ -44,8 +44,6 @@ class TableEventSerialiser
     std::string m_table_name;
 };
 
-
-
 //----------------------------------------------------------------------
 class TableClearSerialise : public TableEventSerialiser
 {
@@ -54,8 +52,6 @@ class TableClearSerialise : public TableEventSerialiser
     /* Initialise the message we wil work with */
     void init_msg(sam::txMessage& msg,
                   const std::string& table_name);
-
-
 };
 
 //----------------------------------------------------------------------

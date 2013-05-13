@@ -12,6 +12,35 @@ Work: new approach to snapshots
 
 
 ----------------------------------------------------------------------
+NEXT
+----
+
+
+* can we remove the m_sessions.lock?#
+
+  -> YES: but, we still will need synchronization in order to avoid the
+     "reset-read" race condition
+
+* TODO: write a note about his "reset-read" race condition, perhaps create a
+  new HOWTO_race_condition.txt, to start collecting types of race conditions.
+
+* So two solutions: either use smart pointers, or, add row locking.  I think I
+  will go for the row locking, because that is just a simple case of adding a
+  mutex to the row structure.  Having per-row locking is not ideal, however,
+  it just be more performant than just having a global lock.  And, at least I
+  fully understand the model that I am using.
+
+* A further improvement wouldbe to use read-write locks.  However, if I do
+  that, beware that the AdminSession class is not lock
+  single-thread-synchronized (which it current is, because all threads have to
+  go via the sessions.lock).
+
+* why are locks needed?  In order to prevent a writer modifying a structure
+  while there are other readers and writers using the structure.  Because,
+  that can invalidate the structure.
+
+
+----------------------------------------------------------------------
 ALL
 ---
 

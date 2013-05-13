@@ -98,7 +98,12 @@ class DataRow
     void copy_row(AdminInterface::Row& dest) const;
 
     bool               has_field(const std::string&) const;
+
+    /** Get field, or throw out_of_range exception if not found */
     const std::string& get_field(const std::string&) const;
+
+    /** Copy field. Return value is true if field was found. */
+    bool copy_field(const std::string&, std::string&) const;
 
     void clear();
 
@@ -124,7 +129,12 @@ class DataTable
 
 
     void copy_table(AdminInterface::Table& dest) const;
+
     void copy_row(const std::string& rowkey, AdminInterface::Row&) const;
+
+    bool copy_field(const std::string& rowkey,
+                    const std::string& field,
+                    std::string& dest) const;
 
     const std::string& table_name() const { return m_table_name; }
 
@@ -140,6 +150,8 @@ class DataTable
                                      const std::string & column) const;
 
     void clear_table();
+
+    void delete_row(const std::string & rowkey);
 
     /* Principle method for updating table content */
     void update_row(const std::string & rowkey,
@@ -185,7 +197,7 @@ class DataTable
     void add_column_NOLOCK(const std::string & column,
                            std::list<TableEventPtr>& events);
 
-    void   copy_subscribers(std::vector< SID > &subs) const;
+    void copy_subscribers(std::vector< SID > &subs) const;
 
     std::string m_table_name;
     AdminInterfaceImpl * m_ai;
@@ -194,6 +206,8 @@ class DataTable
     std::vector< std::string >      m_columns;
     std::map< std::string, size_t > m_column_index;
 
+    // TODO: do we need to have a separate vector<> and map<> ? Why not just
+    // use a map<> ?
     std::vector< DataRow >          m_rows;
     std::map< std::string, size_t > m_row_index;
 

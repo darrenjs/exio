@@ -54,13 +54,12 @@ namespace meta
 //----------------------------------------------------------------------
 /* Build a column style attribute */
  sam::txContainer column_attr_style(
-  const std::string& style_name,
-  const std::string& background_color)
+  const std::string& style_name)
 {
   sam::txContainer container("style");
 
   container.put_field("style_name", style_name);
-  container.put_field("bg", background_color);
+//  container.put_field("bg", background_color);
 
   return container;
 }

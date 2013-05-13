@@ -258,7 +258,7 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
   {
     trigger_close();
     return;
-      }
+  }
 }
 
 //----------------------------------------------------------------------

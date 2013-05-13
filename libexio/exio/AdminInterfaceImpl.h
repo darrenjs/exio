@@ -115,6 +115,11 @@ class AdminInterfaceImpl : public AdminSession::Listener
                   const std::string& rowkey,
                   AdminInterface::Row&) const;
 
+    bool copy_field(const std::string& tablename,
+                    const std::string& rowkey,
+                    const std::string& field,
+                    std::string& dest);
+
     void table_column_attr(const std::string& table_name,
                            const std::string& column,
                            const sam::txContainer& attribute);
@@ -123,6 +128,9 @@ class AdminInterfaceImpl : public AdminSession::Listener
                      const std::list<std::string>&);
 
     void clear_table(const std::string& tablename);
+
+    void delete_row(const std::string& tablename,
+                    const std::string& rowkey);
 
     void monitor_snapshot(const std::string& tablename);
     void monitor_snapshot();

@@ -135,6 +135,24 @@ struct NewRow : public TableEvent
 };
 
 //----------------------------------------------------------------------
+struct RowRemoved : public TableEvent
+{
+    std::string rowkey;
+
+    RowRemoved(const std::string& __table_name,
+               const std::string& __row_key)
+      : TableEvent(eRowRemoved, __table_name),
+        rowkey( __row_key)
+    {
+    }
+
+    // TODO: not sure if serialisation methods should appear here.  Because,
+    // idea is to have simple classes which represent events.
+    void serialise(std::list<sam::txMessage>&);
+};
+
+
+//----------------------------------------------------------------------
 struct NewColumn : public TableEvent
 {
     std::string column;

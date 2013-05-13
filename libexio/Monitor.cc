@@ -374,14 +374,24 @@ void Monitor::broadcast_snapshot(const std::string& tablename)
 //----------------------------------------------------------------------
 void Monitor::clear_table(const std::string& tablename)
 {
-  std::list< TableEventPtr > events;
-
   cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
   TableCollection::iterator iter = m_tables.find(tablename);
 
   if ( iter != m_tables.end() )
   {
     iter->second->clear_table();
+  }
+}
+//----------------------------------------------------------------------
+void Monitor::delete_row(const std::string& tablename,
+                         const std::string & rowkey)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  TableCollection::iterator iter = m_tables.find(tablename);
+
+  if ( iter != m_tables.end() )
+  {
+    iter->second->delete_row(rowkey);
   }
 }
 //----------------------------------------------------------------------
@@ -394,6 +404,21 @@ size_t Monitor::table_size(const std::string& tablename)
     return iter->second->size();
   else
     return 0;
+}
+//----------------------------------------------------------------------
+bool Monitor::copy_field(const std::string& tablename,
+                         const std::string& rowkey,
+                         const std::string& field,
+                         std::string& dest) const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+
+  TableCollection::const_iterator iter = m_tables.find(tablename);
+
+  if (iter != m_tables.end())
+    return iter->second->copy_field(rowkey, field, dest);
+  else
+    return false;
 }
 
 } // namespace exio

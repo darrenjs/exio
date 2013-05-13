@@ -165,7 +165,12 @@ void AdminInterface::clear_table(const std::string& tablename)
 {
   m_impl->clear_table(tablename);
 }
-
+//----------------------------------------------------------------------
+void AdminInterface::delete_row(const std::string& tablename,
+                                const std::string& rowkey)
+{
+  m_impl->delete_row(tablename, rowkey);
+}
 //----------------------------------------------------------------------
 void AdminInterface::session_info(SID sid, sid_desc& sd, bool& sf) const
 {
@@ -181,6 +186,13 @@ void AdminInterface::monitor_snapshot()
 {
   m_impl->monitor_snapshot();
 }
-
+//----------------------------------------------------------------------
+bool AdminInterface::copy_field(const std::string& tablename,
+                                const std::string& rowkey,
+                                const std::string& field,
+                                std::string& dest)
+{
+  return m_impl->copy_field(tablename, rowkey, field, dest);
+}
 //----------------------------------------------------------------------
 }

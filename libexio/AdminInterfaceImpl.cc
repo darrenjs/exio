@@ -939,9 +939,15 @@ void AdminInterfaceImpl::table_column_attr(const std::string& tablename,
 }
 
 //----------------------------------------------------------------------
-void AdminInterfaceImpl::clear_table(const std::string& table_name)
+void AdminInterfaceImpl::clear_table(const std::string& tablename)
 {
-  m_monitor.clear_table(table_name);
+  m_monitor.clear_table(tablename);
+}
+
+//----------------------------------------------------------------------
+void AdminInterfaceImpl::delete_row(const std::string& tablename, const std::string& rowkey)
+{
+  m_monitor.delete_row(tablename, rowkey);
 }
 
 //----------------------------------------------------------------------
@@ -1311,5 +1317,18 @@ void AdminInterfaceImpl::monitor_snapshot()
 {
   m_monitor.broadcast_snapshot();
 }
+//----------------------------------------------------------------------
+bool AdminInterfaceImpl::copy_field(const std::string& tablename,
+                                    const std::string& rowkey,
+                                    const std::string& field,
+                                    std::string& dest)
+{
+  return m_monitor.copy_field(tablename,
+                              rowkey,
+                              field,
+                              dest);
 
+
+}
+//----------------------------------------------------------------------
 } // namespace exio

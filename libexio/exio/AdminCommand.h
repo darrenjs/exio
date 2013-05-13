@@ -48,10 +48,12 @@ namespace exio
   /* Functions within meta namespace are associate with meta-data content. */
   namespace meta
   {
+
+    // TODO: not sure here is the correct place for column attr helpers ?
+
     /* Build a column style attribute */
     sam::txContainer column_attr_style(
-      const std::string& style_name,
-      const std::string& background_color);
+      const std::string& style_name);
 
     /* Build a column command attribute */
     sam::txContainer column_attr_command(

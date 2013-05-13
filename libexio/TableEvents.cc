@@ -19,6 +19,7 @@
 */
 #include "exio/TableEvents.h"
 #include "exio/TableSerialiser.h"
+#include "exio/MsgIDs.h"
 
 
 namespace exio {
@@ -81,6 +82,21 @@ void RowMultiUpdate::serialise(std::list<sam::txMessage>& msglist)
        }
      }
   }
+}
+
+//----------------------------------------------------------------------
+void RowRemoved::serialise(std::list<sam::txMessage>& msglist)
+{
+  msglist.push_back( sam::txMessage() );
+
+  // The message representation of a RowRemoved event is quite simple, so we
+  // can implement it directly here.
+  sam::txMessage& msg = msglist.back();
+
+  msg.type( id::tablerowdel );
+  msg.root().put_field( id::QN_msgtype,   id::tablerowdel);
+  msg.root().put_field( id::QN_tablename, table_name);
+  msg.root().put_field( id::QN_row_key,   rowkey);
 }
 
 //----------------------------------------------------------------------

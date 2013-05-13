@@ -71,26 +71,27 @@ namespace id  /* identifiers */
   static const std::string snapn          = "snapn";
 
   // true/false representation
-  static const std::string True   = "1";
-  static const std::string False  = "0";
+  static const std::string True   = "1";  // yes
+  static const std::string False  = "0";  // no
 
   // qualified-name id for fields
-  static const sam::qname QN_rescode        = QNAME( head, rescode );
-  static const sam::qname QN_restext        = QNAME( head, restext );
-  static const sam::qname QN_command        = QNAME( head, command );
-  static const sam::qname QN_more           = QNAME( head, more );
-  static const sam::qname QN_msgtype        = QNAME( head, msgtype );
-  static const sam::qname QN_tablename      = QNAME( head, tablename );
-  static const sam::qname QN_columns        = QNAME( body, columns );
-  static const sam::qname QN_body_rows      = QNAME( body, rows );
-  static const sam::qname QN_body_resptype  = QNAME( body, resptype );
   static const sam::qname QN_body_respdata  = QNAME( body, respdata );
-  static const sam::qname QN_serviceid      = QNAME( head, serviceid );
-  static const sam::qname QN_noautosub      = QNAME( head, noautosub );
+  static const sam::qname QN_body_resptype  = QNAME( body, resptype );
+  static const sam::qname QN_body_rows      = QNAME( body, rows );
+  static const sam::qname QN_columns        = QNAME( body, columns );
+  static const sam::qname QN_command        = QNAME( head, command );
   static const sam::qname QN_head_reqseqno  = QNAME( head, reqseqno );
   static const sam::qname QN_head_snapi     = QNAME( head, snapi );
   static const sam::qname QN_head_snapn     = QNAME( head, snapn );
   static const sam::qname QN_head_user      = QNAME( head, user );
+  static const sam::qname QN_more           = QNAME( head, more );
+  static const sam::qname QN_msgtype        = QNAME( head, msgtype );
+  static const sam::qname QN_noautosub      = QNAME( head, noautosub );
+  static const sam::qname QN_rescode        = QNAME( head, rescode );
+  static const sam::qname QN_restext        = QNAME( head, restext );
+  static const sam::qname QN_row_key        = QNAME( head, row_key );
+  static const sam::qname QN_serviceid      = QNAME( head, serviceid );
+  static const sam::qname QN_tablename      = QNAME( head, tablename );
 
   // message types
   static const std::string admindescr   = "admindescr";
@@ -102,6 +103,7 @@ namespace id  /* identifiers */
   static const std::string tableclear   = "tableclear";
   static const std::string tabledescr   = "tabledescr";
   static const std::string tableupdate  = "tableupdate";
+  static const std::string tablerowdel  = "tablerowdel";
   static const std::string heartbeat    = "heartbeat";
 
   // error codes

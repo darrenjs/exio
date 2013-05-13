@@ -293,6 +293,22 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
           }
         }
       }
+      else if (ev->type == TableEvent::eRowRemoved)
+      {
+        RowRemoved* rev = dynamic_cast<RowRemoved*>(ev);
+
+        rev->serialise(msgs);
+        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
+             mit != msgs.end(); ++mit)
+        {
+
+          for (std::vector<SID>::iterator s = subs.begin();
+               s != subs.end(); ++s)
+          {
+            m_ai->send_one(*mit, *s);
+          }
+        }
+      }
       else if (ev->type == TableEvent::ePCMD)
       {
         PCMDEvent* rev = dynamic_cast<PCMDEvent*>(ev);
@@ -482,6 +498,52 @@ void DataTable::clear_table()
 
   _nolock_publish_update(events);
 }
+
+//----------------------------------------------------------------------
+bool DataTable::copy_field(const std::string& rowkey,
+                           const std::string& field,
+                           std::string& dest) const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
+
+  std::map<std::string, size_t>::const_iterator it = m_row_index.find(rowkey);
+  if (it != m_row_index.end())
+  {
+    return m_rows[ it->second ].copy_field( field, dest);
+  }
+  else
+  {
+    return false;
+  }
+}
+
+//----------------------------------------------------------------------
+void DataTable::delete_row(const std::string & rowkey)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
+
+  std::map<std::string, size_t>::iterator it = m_row_index.find(rowkey);
+  if (it != m_row_index.end())
+  {
+    std::list< TableEventPtr > events;
+
+    size_t const index = it->second;
+
+    m_rows.erase( m_rows.begin() + index  ); // costly
+
+    // need to update the indicies
+    m_row_index.erase( it );
+    for (std::map< std::string, size_t >::iterator j = m_row_index.begin();
+         j != m_row_index.end(); j++)
+    {
+      if (j->second > index) j->second -= 1;
+    }
+
+    events.push_back( new RowRemoved(m_table_name, rowkey) );
+    _nolock_publish_update(events);
+  }
+}
+
 
 //----------------------------------------------------------------------
 void DataTable::add_column_attr(const std::string& column,
@@ -850,6 +912,18 @@ const std::string& DataRow::get_field(const std::string& fn) const
   return iter->second.value;
 }
 
+//----------------------------------------------------------------------
+bool DataRow::copy_field(const std::string& fn, std::string& dest) const
+{
+  Fields::const_iterator iter = m_fields.find( fn );
+
+  if (iter == m_fields.end()) return false;
+
+  // check before copy, to try to save allocation of memory etc.
+  if (dest != iter->second.value) dest = iter->second.value;
+
+  return true;
+}
 //----------------------------------------------------------------------
 void DataRow::clear()
 {

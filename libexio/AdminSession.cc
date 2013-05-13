@@ -173,7 +173,7 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_peeraddr( sock_descr(fd) ),
     m_listener( l ),  // need store listener before IO started
     m_autoclose(false),
-    m_hb_intvl(60),
+    m_hb_intvl(30),
     m_start(time(NULL)),
     m_io( new AdminIO(m_appsvc, fd, this ))
 {
