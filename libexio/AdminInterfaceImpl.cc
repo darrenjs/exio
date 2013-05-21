@@ -1280,7 +1280,7 @@ AdminResponse AdminInterfaceImpl::admincmd_del_session(AdminRequest& req)
 
   std::list<SID> sessions_stopped;
 
-  typename AdminRequest::Args::const_iterator iter;
+  AdminRequest::Args::const_iterator iter;
   for (iter = req.args().begin(); iter != req.args().end(); ++iter)
   {
     SID s  = SID::fromString( *iter );
