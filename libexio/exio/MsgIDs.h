@@ -89,7 +89,6 @@ namespace id  /* identifiers */
   static const sam::qname QN_noautosub      = QNAME( head, noautosub );
   static const sam::qname QN_rescode        = QNAME( head, rescode );
   static const sam::qname QN_restext        = QNAME( head, restext );
-  static const sam::qname QN_row_key        = QNAME( head, row_key );
   static const sam::qname QN_serviceid      = QNAME( head, serviceid );
   static const sam::qname QN_tablename      = QNAME( head, tablename );
 

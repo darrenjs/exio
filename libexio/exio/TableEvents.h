@@ -185,8 +185,7 @@ struct PCMDEvent : public TableEvent
 
     // TODO: not sure if serialisation methods should appear here.  Because,
     // idea is to have simple classes which represent events.
-    void serialise(std::list<sam::txMessage>&){}
-
+    void serialise(std::list<sam::txMessage>&);
 };
 
 //----------------------------------------------------------------------

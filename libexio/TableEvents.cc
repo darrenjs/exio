@@ -96,7 +96,33 @@ void RowRemoved::serialise(std::list<sam::txMessage>& msglist)
   msg.type( id::tablerowdel );
   msg.root().put_field( id::QN_msgtype,   id::tablerowdel);
   msg.root().put_field( id::QN_tablename, table_name);
-  msg.root().put_field( id::QN_row_key,   rowkey);
+  msg.root().put_field( QNAME( id::head, id::row_key) );
+}
+
+//----------------------------------------------------------------------
+void PCMDEvent::serialise(std::list<sam::txMessage>& msglist)
+{
+  static std::string row_0 = id::row_prefix + "0";
+
+  msglist.push_back( sam::txMessage() );
+
+  sam::txMessage& msg = msglist.back();
+
+  msg.type( id::tableupdate );
+  msg.root().put_field( id::QN_tablename, table_name);
+  msg.root().put_field( id::QN_msgtype,   id::tableupdate);
+
+  sam::txContainer& body = msg.root().put_child( id::body );
+
+  // insert a single row
+  sam::txContainer& row = body.put_child( row_0 );
+  row.put_field(id::row_key, row_key);
+  body.put_field(id::rows, "1");
+
+  // obtain a container for the meta
+  sam::txContainer& __meta = row.put_child( meta );
+  std::string meta_fieldname = ".meta." + column;
+  __meta.name( meta_fieldname );
 }
 
 //----------------------------------------------------------------------
