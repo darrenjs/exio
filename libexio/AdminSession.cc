@@ -380,7 +380,11 @@ void AdminSession::housekeeping()
   // note, 'm_last_send' is more or less 'current time'
   if (abs(now - lastactivity) >= m_hb_intvl)
   {
-    enqueueToSend( sam::txMessage(id::heartbeat) );
+    // we are sending an unsolicited heartbeat, so, also include the
+    // testrequest flag to request a reply from the peer.
+    sam::txMessage hbmsg(id::heartbeat);
+    hbmsg.root().put_field(id::QN_testrequest, id::True );
+    enqueueToSend( hbmsg );
   }
 }
 

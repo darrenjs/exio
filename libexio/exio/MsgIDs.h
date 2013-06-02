@@ -58,17 +58,18 @@ namespace id  /* identifiers */
   static const std::string rows           = "rows";
   static const std::string scalarlist     = "scalarlist";
   static const std::string serviceid      = "serviceid";
+  static const std::string shorthelp      = "short";
+  static const std::string snapi          = "snapi";
+  static const std::string snapn          = "snapn";
   static const std::string source         = "source";
   static const std::string source_type    = "source_type";
-  static const std::string shorthelp      = "short";
   static const std::string synthetic      = "synthetic";
   static const std::string table          = "table";
   static const std::string tablename      = "tablename";
+  static const std::string testrequest    = "testrequest";
   static const std::string text           = "text";
   static const std::string user           = "user";
   static const std::string value          = "value";
-  static const std::string snapi          = "snapi";
-  static const std::string snapn          = "snapn";
 
   // true/false representation
   static const std::string True   = "1";  // yes
@@ -91,6 +92,7 @@ namespace id  /* identifiers */
   static const sam::qname QN_restext        = QNAME( head, restext );
   static const sam::qname QN_serviceid      = QNAME( head, serviceid );
   static const sam::qname QN_tablename      = QNAME( head, tablename );
+  static const sam::qname QN_testrequest    = QNAME( head, testrequest );
 
   // message types
   static const std::string admindescr   = "admindescr";
