@@ -332,18 +332,23 @@ void AdminIO::enqueue(const QueuedItem &i)
 {
   push_item(i);
 }
-
 //----------------------------------------------------------------------
 void AdminIO::push_item(const QueuedItem &i)
 {
   {
     cpp11::lock_guard<cpp11::mutex> guard( m_q.mutex );
+    m_q.bytes_pending += i.size;
     m_q.items.push( i );
     m_have_data = true;
     m_q.convar.notify_one();
   }
 }
-
+//----------------------------------------------------------------------
+unsigned long AdminIO::bytes_pending() const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_q.mutex );
+  return m_q.bytes_pending;
+}
 //----------------------------------------------------------------------
 void AdminIO::wait_and_pop(QueuedItem& value)
 {
@@ -379,9 +384,9 @@ void AdminIO::wait_and_pop(QueuedItem& value)
 
   value = m_q.items.front();
   m_q.items.pop();
+  m_q.bytes_pending -= value.size;
 
   m_have_data = (m_q.items.size() > 0)? true : false;
-
 
 //  _INFO_("<<< AdminIO::wait_and_pop");
 }
@@ -423,8 +428,8 @@ void AdminIO::socket_write()
     {
       exit_reason = Unknown;
 
-      QueuedItem qi;
-      wait_and_pop( qi );
+      QueuedItem item_to_write;
+      wait_and_pop( item_to_write );
 
       // Note: here we can't be sure of the blocking/non-blocking state of the
       // socket
@@ -437,15 +442,15 @@ void AdminIO::socket_write()
       // write, always test for validity, other we might hit the socket-alias
       // race condition (although, we have not fully elliminated the race
       // condition here).
-      while ( not m_is_stopping and bytes_done < qi.size)
+      while ( not m_is_stopping and bytes_done < item_to_write.size)
       {
         int fd = m_fd;
 
         /* Note: now using send() instead of write(), so that we can prevent
          * SIGPIPE from being raised */
         const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
-        char* buf       = qi.buf()+bytes_done;
-        size_t len      = qi.size-bytes_done;
+        char* buf       = item_to_write.buf()+bytes_done;
+        size_t len      = item_to_write.size-bytes_done;
 
         ssize_t n = send(fd, buf, len, flags);
 //        ssize_t n = write(fd, qi.buf()+bytes_done, qi.size-bytes_done);
@@ -484,7 +489,7 @@ void AdminIO::socket_write()
         }
       }
 
-      if (qi.flags bitand QueuedItem::eThreadKill)
+      if (item_to_write.flags bitand QueuedItem::eThreadKill)
       {
         /* we have been signalled to actively close the connection */
 
@@ -506,7 +511,7 @@ void AdminIO::socket_write()
         if (exit_reason == Unknown) exit_reason = QIKILL;
       }
 
-      qi.release();
+      item_to_write.release();
       if (exit_reason == Unknown)  exit_reason = WHILE;
     }
   }

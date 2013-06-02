@@ -100,6 +100,7 @@ class AdminSession : public AdminIO::Listener
     time_t        last_write() const { return (m_io)? m_io->last_write():0; }
     unsigned long bytes_out()  const { return (m_io)? m_io->bytes_out():0; }
     unsigned long bytes_in()   const { return (m_io)? m_io->bytes_in():0; }
+    unsigned long bytes_pend() const { return (m_io)? m_io->bytes_pending():0; }
 
   private:
 

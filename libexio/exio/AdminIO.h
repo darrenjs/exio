@@ -149,15 +149,24 @@ class AdminIO
 
     void enqueue(const QueuedItem& i);
 
+
+    // TODO: this is where we start the implementation of handling slow
+    // consumers.  Once pending bytes reach the low limit, warnings will be
+    // generated, perhaps even sending alerts to other clients?  Once the high
+    // limit is reached, the session will be terminated. -1 can be provided to
+    // disable either limit.
+    void set_limits(int low, int high) {}
+
     bool stopping() const;
     void request_stop();
 
     bool safe_to_delete() const;
 
     // IO stats
-    time_t        last_write() const { return m_last_write; }
-    unsigned long bytes_out()  const { return m_bytesout; }
-    unsigned long bytes_in()   const { return m_bytesin; }
+    time_t        last_write()    const { return m_last_write; }
+    unsigned long bytes_out()     const { return m_bytesout; }
+    unsigned long bytes_in()      const { return m_bytesin; }
+    unsigned long bytes_pending() const;
 
     int reader_lwp() const { return m_lwp.reader; }
     int writer_lwp() const { return m_lwp.writer; }
@@ -201,6 +210,9 @@ class AdminIO
         mutable cpp11::mutex mutex;
         std::queue<QueuedItem> items;
         cpp11::condition_variable convar;
+        size_t bytes_pending;
+
+        ProtectedQueue() : bytes_pending(0) {}
     } m_q;
 
     AtomicInt m_threads_complete;

@@ -1160,7 +1160,7 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
       if (m_sessions.reg[i].used()) count++;
 
     os << "Active: " <<  count << "\n";
-    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, Last, BytesOut, BytesIn\n";
+    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, Last, BytesOut, BytesIn, BytesPend\n";
 
     for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
     {
@@ -1176,6 +1176,7 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
       os << utils::datetimestamp(sptr->last_write()) << ", ";
       os << sptr->bytes_out() << ", ";
       os << sptr->bytes_in() << ", ";
+      os << sptr->bytes_pend() << ", ";
       os << "\n";
     }
   }
