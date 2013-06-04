@@ -47,8 +47,20 @@
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
 
-// global level to control level of debugging
-int verbose = 0;
+struct ProgramOptions
+{
+    std::string addr;
+    std::string port;
+    std::string cmd;
+    std::list< std::string > cmdargs;
+
+    int verbose; // count of '-v'
+
+    ProgramOptions()
+      : verbose(0)
+    {
+    }
+} program_options;
 
 
 class AdminListener : public exio::AdminSession::Listener
@@ -265,7 +277,8 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
 void AdminListener::session_msg_received(const sam::txMessage& msg,
                                          exio::AdminSession& session)
 {
-  if (verbose > 0)
+
+  if (program_options.verbose > 2)
   {
     // if we are here, then just dump the message to cout
     sam::MessageFormatter fmt(true);
@@ -528,20 +541,6 @@ void usage()
 }
 
 //----------------------------------------------------------------------
-struct ProgramOptions
-{
-    std::string addr;
-    std::string port;
-    std::string cmd;
-    std::list< std::string > cmdargs;
-
-    int v; // count of '-v'
-
-    ProgramOptions()
-      : v(0)
-    {
-    }
-} program_options;
 
 //----------------------------------------------------------------------
 void process_cmd_line(int argc, char** argv)
@@ -588,7 +587,7 @@ void process_cmd_line(int argc, char** argv)
 
     switch(c)
     {
-      case 'v' : program_options.v++; break;
+      case 'v' : program_options.verbose++; break;
       case 'h' : usage(); exit(0);
       case '?' : {
         std::cout << "invalid option: '"
@@ -629,9 +628,9 @@ int main(const int argc, char** argv)
     // TODO: allow the error level to be specified by config
 
     exio::ConsoleLogger::Levels loglevel = exio::ConsoleLogger::eNone;
-    if (program_options.v > 0 ) loglevel = exio::ConsoleLogger::eWarn;
-    if (program_options.v > 1 ) loglevel = exio::ConsoleLogger::eInfo;
-    if (program_options.v > 2 ) loglevel = exio::ConsoleLogger::eAll;
+    if (program_options.verbose > 0 ) loglevel = exio::ConsoleLogger::eWarn;
+    if (program_options.verbose > 1 ) loglevel = exio::ConsoleLogger::eInfo;
+    if (program_options.verbose > 2 ) loglevel = exio::ConsoleLogger::eAll;
 
     exio::ConsoleLogger logger(exio::ConsoleLogger::eStderr, loglevel);
 
