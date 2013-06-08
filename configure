@@ -16525,8 +16525,9 @@ esac
 
 #========== Generation ==========
 
-# List the files that will be generated
-ac_config_files="$ac_config_files Makefile libcpp11/Makefile libexio/Makefile src/Makefile"
+# List the files that will be generated. These are mainly makefiles, which
+# automake will generate from the corresponding Makefile.am
+ac_config_files="$ac_config_files Makefile libcpp11/Makefile libexio/Makefile src/Makefile test/Makefile"
 
 
 # Trigger the generation of our makefiles
@@ -17642,6 +17643,7 @@ do
     "libcpp11/Makefile") CONFIG_FILES="$CONFIG_FILES libcpp11/Makefile" ;;
     "libexio/Makefile") CONFIG_FILES="$CONFIG_FILES libexio/Makefile" ;;
     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
+    "test/Makefile") CONFIG_FILES="$CONFIG_FILES test/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

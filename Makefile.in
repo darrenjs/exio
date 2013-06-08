@@ -261,7 +261,7 @@ top_srcdir = @top_srcdir@
 # aclocal where it should look for macro files when it's executed by rules
 # defined in Makefile.am.
 ACLOCAL_AMFLAGS = -I m4
-SUBDIRS = libcpp11 libexio src
+SUBDIRS = libcpp11 libexio src test
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 

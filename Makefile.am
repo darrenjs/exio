@@ -6,4 +6,4 @@
 # defined in Makefile.am.
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = libcpp11 libexio src
+SUBDIRS = libcpp11 libexio src test

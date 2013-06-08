@@ -42,12 +42,14 @@ AC_C_INLINE
 
 #========== Generation ==========
 
-# List the files that will be generated
+# List the files that will be generated. These are mainly makefiles, which
+# automake will generate from the corresponding Makefile.am
 AC_CONFIG_FILES([
 Makefile
 libcpp11/Makefile
 libexio/Makefile
 src/Makefile
+test/Makefile
 ])
 
 # Trigger the generation of our makefiles
