@@ -1,6 +1,13 @@
 HISTORY
 =======
 
+
+1.4.1
+-----
+
+'diags' command will now show the number of queued bytes, that are waiting to
+be written on an admin session.
+
 1.3
 ----
 
