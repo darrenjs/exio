@@ -47,27 +47,139 @@
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
 
+
+std::string exec(const std::string & path,
+                 const std::string & cmd,
+                 const std::vector<std::string>& args,
+                 int & retval,
+                 const char* quotes)
+{
+  // TODO: see if we can capture stderr too. I tyhink it is just a case of
+  // adding ampersand to the command
+
+  std::ostringstream cmdss;
+
+  if (not path.empty()) cmdss << path << "/";
+  cmdss << cmd;
+
+  for (std::vector<std::string>::const_iterator it = args.begin();
+       it != args.end(); ++it)
+  {
+    cmdss << " " << quotes << *it << quotes;
+  }
+
+  FILE * pipe = popen(cmdss.str().c_str(), "r");
+
+  if (pipe == NULL)
+  {
+    retval = -1;
+    return "popen error";
+  }
+
+  std::ostringstream os;
+  try
+  {
+    char temp[4096];
+    while (!feof(pipe) and !ferror(pipe))
+    {
+      if (fgets(temp, sizeof(temp), pipe) != NULL)
+      {
+        os << temp;
+      }
+    }
+  }
+  catch (...)
+  {
+    /* prevent exceptions from unwinding the stack, because pclose() must be
+     * called.  */
+    pclose(pipe);
+    retval = -1;
+    return "failure when reading from popen pipe";
+  }
+
+  retval = pclose(pipe);
+  if (retval > 0 ) retval = retval >> 8;
+  //_P_(retval);
+  //_INFO_("Out:" << os.str());
+
+  return os.str();
+}
+
+
+
+/*
+ * Taken from Unix Network Programming, section 3.8.  Look up sock_ntop.c for
+ * full implementation of this function.
+ */
+std::string sock_ntop(const struct sockaddr * sa,
+                      socklen_t salen)
+{
+
+  char str[128];
+
+  switch (sa->sa_family)
+  {
+    case AF_INET:
+    {
+      struct sockaddr_in * sin = (struct sockaddr_in*) sa;
+      if (inet_ntop(AF_INET, &sin->sin_addr, str, sizeof(str)) == NULL)
+        return "";
+
+      std::stringstream os;
+      os << str << ":" << ntohs(sin->sin_port);
+      return os.str();
+    }
+    default:
+      return "";
+  }
+}
+
+
+//----------------------------------------------------------------------
+// TODO: put into a library
+std::string peername(int fd)
+{
+  struct sockaddr_storage addr;
+  socklen_t addrlen = sizeof(addr);
+  memset(&addr,0,sizeof(addr));
+
+  int __e =  getpeername(fd, (struct sockaddr *) &addr, &addrlen);
+
+  if (!__e)
+    return sock_ntop((const struct sockaddr *)&addr, addrlen);
+  else
+    return "unknown";
+}
+//----------------------------------------------------------------------
+// TODO: put into a library
+std::string sockname(int fd)
+{
+  struct sockaddr_storage addr;
+  socklen_t addrlen = sizeof(addr);
+  memset(&addr,0,sizeof(addr));
+
+  int __e =  getsockname(fd, (struct sockaddr *) &addr, &addrlen);
+
+  if (!__e)
+    return sock_ntop((const struct sockaddr *)&addr, addrlen);
+  else
+    return "unknown";
+}
+
+
+
 struct ProgramOptions
 {
     std::string addr;
     std::string port;
-    std::string cmd;
-    std::list< std::string > cmdargs;
-
-    int verbose; // count of '-v'
-
-    ProgramOptions()
-      : verbose(0)
-    {
-    }
-} program_options;
-
+} po;
+pid_t g_pid;
 
 class AdminListener : public exio::AdminSession::Listener
 {
   public:
 
-    AdminListener();
+    AdminListener(int fd);
 
     /* inherited from AdminSession::Listener */
     virtual void session_msg_received(const sam::txMessage&,
@@ -83,23 +195,23 @@ class AdminListener : public exio::AdminSession::Listener
 
     void trigger_close();
 
-    void handle_table_response(const sam::txContainer* body);
-
-
-    void handle_reponse(const sam::txMessage& msg,
-                        exio::AdminSession& session);
-
-
     cpp11::condition_variable m_convar;
     cpp11::mutex m_mutex;
     bool m_session_open;
     bool m_show_unsol;
+    int m_fd;
+
+    std::string m_peername;
+    std::string m_sockname;
 };
 //----------------------------------------------------------------------
-AdminListener::AdminListener()
+AdminListener::AdminListener(int fd)
   : m_session_open( true ),
-    m_show_unsol(false)
+    m_show_unsol(false),
+    m_fd(fd)
 {
+  m_peername = peername(fd);
+  m_sockname = sockname(fd);
 }
 //----------------------------------------------------------------------
 void AdminListener::trigger_close()
@@ -109,216 +221,34 @@ void AdminListener::trigger_close()
   m_convar.notify_one();
 }
 //----------------------------------------------------------------------
-void AdminListener::handle_table_response(const sam::txContainer* body)
-{
-  /* handler for: body.resptype=table */
 
-  typedef std::vector<std::string>::const_iterator VSIter;
-
-  bool synthetic = (body->find_field(exio::id::synthetic) != NULL);
-
-  const sam::txContainer * respdata    = body->find_child(exio::id::respdata);
-  if (!respdata) return;
-
-  const sam::txContainer * tabledescr  = respdata->find_child(exio::id::tabledescr);
-  const sam::txContainer * tableupdate = respdata->find_child(exio::id::tableupdate);
-
-  std::vector< std::string > columns;
-  if (tabledescr)
-  {
-    const sam::txContainer * c_columns = tabledescr->find_child(exio::id::columns);
-    if (c_columns)
-    {
-      size_t msgcount = 0;
-      const sam::txField * fmsgcount = c_columns->find_field(exio::id::msgcount);
-      if (fmsgcount) msgcount = atoi( fmsgcount->value().c_str() );
-
-      for (size_t msgn = 0; msgn < msgcount; ++msgn)
-      {
-        std::ostringstream os;
-        os << exio::id::msg_prefix << msgn;
-        const sam::txContainer * c_msgn = c_columns->find_child(os.str());
-        if (c_msgn)
-        {
-          const sam::txField * f_colname
-            = c_msgn->find_field(exio::id::colname);
-          if (f_colname)
-          {
-            if (synthetic and f_colname->value() == exio::id::row_key)
-              continue;
-            columns.push_back( f_colname->value() );
-          }
-        }
-      }
-    }
-  }
-
-  if (!columns.empty() and !synthetic)
-  {
-    for (VSIter it = columns.begin(); it != columns.end(); ++it)
-    {
-      if (it != columns.begin()) std::cout << ", ";
-      std::cout << *it;
-    }
-    std::cout << "\n";
-  }
-
-
-  if (tableupdate)
-  {
-    // iterate over all the rows
-    for (sam::ChildMap::const_iterator citer = tableupdate->child_begin();
-         citer != tableupdate->child_end(); ++citer)
-    {
-      bool usedelim = false;
-
-      const sam::txContainer* child = citer->second;
-
-
-      // iterate over know columns
-      for (VSIter it = columns.begin(); it != columns.end(); ++it)
-      {
-        if (usedelim) std::cout << ", "; else usedelim=true;
-        const sam::txField * f_ptr = child->find_field( *it );
-        if (f_ptr) std::cout << f_ptr->value();
-        else std::cout << "";
-      }
-
-      // // iterate over all the fields
-      // for (sam::FieldMap::const_iterator f = child->field_begin();
-      //     f != child->field_end(); ++f)
-      // {
-      //   if (f->first == exio::id::row_key) continue;
-      //   if (usedelim) std::cout << ", "; else usedelim=true;
-      //   std::cout << f->second->value();
-      // }
-      std::cout << "\n";
-    }
-  }
-
-}
-
-//----------------------------------------------------------------------
-void AdminListener::handle_reponse(const sam::txMessage& msg,
-                                   exio::AdminSession& session)
-{
-  const sam::txField* rescode = msg.root().find_field(exio::id::QN_rescode);
-  const sam::txField* restext = msg.root().find_field(exio::id::QN_restext);
-
-  int retval = (rescode)? atoi( rescode->value().c_str() ) : -1;
-
-  std::cout << retval;
-  if (retval == 0)
-    std::cout << " OK, ";  // Inspired by ZX Spectrum format!!! ;-)
-  else
-    std::cout << " FAIL, ";
-
-  if (restext) std::cout << restext->value();
-  std::cout << '\n';  // terminate the response summary
-
-  /* process head */
-  const sam::txContainer * body = msg.root().find_child("body");
-
-  /* process body
-   *
-   * Here we need to identify where in the message the data can be
-   * found. EXIO supports several data-structures, so each of them must be
-   * supported here.
-   */
-  if (body and body->check_field(exio::id::resptype, exio::id::table))
-  {
-    handle_table_response( body );
-  }
-  else if (body and body->check_field(exio::id::resptype, exio::id::text))
-  {
-    const sam::txContainer * respdata =
-      body->find_child(exio::id::respdata);
-
-    if (respdata)
-    {
-      const sam::txField* text = respdata->find_field(exio::id::text);
-      if (text != NULL and text->value().size() )
-      {
-        std::cout << text->value() << "\n";
-      }
-    }
-  }
-  else
-  {
-    std::cout << "NO FORMAT\n";
-  }
-  // {
-  //   const sam::txContainer * data = NULL;
-  //   if (body) data = body->find_child("data");
-  //   if (data)
-  //   {
-  //     for( sam::ChildMap::const_iterator iter = data->child_begin();
-  //          iter != data->child_end(); ++iter)
-  //     {
-  //       const sam::txField* value  = iter->second->find_field("value");
-  //       const sam::txField* format = iter->second->find_field("format");
-
-  //       if (format and value and (format->value() == "scalar"))
-  //       {
-  //         std::cout << value->value() << "\n";
-  //       }
-  //     }
-  //   }
-  // }
-
-  if ( not exio::has_pending(msg) )
-  {
-    trigger_close();
-    return;
-  }
-}
-
-//----------------------------------------------------------------------
 void AdminListener::session_msg_received(const sam::txMessage& msg,
                                          exio::AdminSession& session)
 {
+  sam::MessageFormatter fmt(true);
+  fmt.format( msg, std::cout );
+  std::cout << "\n";
+  std::cout.flush();
 
-  if (program_options.verbose > 2)
-  {
-    // if we are here, then just dump the message to cout
-    sam::MessageFormatter fmt(true);
-    std::cout <<"MESSAGE: ";
-    fmt.format( msg, std::cout );
-    std::cout << "\n";
-    std::cout.flush();
-  }
+  std::cout << "sleeping...\n";
 
-  // Does this look like a bye ?
-  if (msg.type() == exio::id::msg_bye )
-  {
-    trigger_close();
-    return;
-  }
+  std::cout << "this process " << g_pid << " owns tcp: " <<  m_sockname << " --> " << m_peername
+            << " (local / foreign)\n\n";
 
-  // Does this look like a response to a request?
-  if (msg.root().name() == exio::id::msg_response )
-  {
-    handle_reponse(msg, session);
-    return;
-  }
+  std::ostringstream cmdstr;
 
-  // skip some expected message types
-  if ((msg.root().name() == exio::id::msg_logon) or
-      (msg.root().name() == exio::id::heartbeat) )
-  {
-    return;
-  }
+  cmdstr  << "netstat -n"
+          << "|\\grep tcp"
+          << "|\\grep " << m_sockname
+          << "|\\grep " << m_peername;
 
+  std::cout << "Proto Recv-Q Send-Q Local Address           Foreign Address\n";
+  std::vector<std::string> args;
+  int retval;
+  std::string results = exec("", cmdstr.str(), args, retval, NULL);
+  std::cout << results << "\n";
 
-  /* If we are here, it looks like an unsoliticed message, which we may want
-   * to display. */
-  if (m_show_unsol)
-  {
-    sam::MessageFormatter fmt(true);
-    fmt.format( msg, std::cout );
-    std::cout << "\n";
-    std::cout.flush();
-  }
+  sleep(10);
 }
 
 //----------------------------------------------------------------------
@@ -335,11 +265,7 @@ void AdminListener::wait_for_session_closure()
   cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
   while ( m_session_open ) { m_convar.wait(lock); }
 }
-
 //----------------------------------------------------------------------
-//----------------------------------------------------------------------
-
-
 
 
 void die(const char* e)
@@ -464,24 +390,6 @@ int connect_ipv4(const char* hostp, const char* portp)
 }
 
 
-void add_arguments(sam::txContainer& c,
-                   const std::list<std::string>&  args)
-{
-  std::ostringstream args_COUNT;
-  args_COUNT << args.size();
-  c.put_field("args_COUNT", args_COUNT.str());
-
-  // now for each individual argument
-  size_t i = 0;
-  for (std::list<std::string>::const_iterator iter=args.begin();
-       iter != args.end(); ++iter)
-  {
-    std::ostringstream args_n_fieldname;
-    args_n_fieldname << "args_" << i++;
-    c.put_field(args_n_fieldname.str(), *iter);
-  }
-}
-
 std::string build_user_id()
 {
   char username[256];
@@ -529,94 +437,39 @@ std::string build_service_id(const char* argv_0)
   return os.str();
 }
 
-
-//----------------------------------------------------------------------
-void usage()
-{
-  std::cout << "Usage: admin [OPTION]... ADDRESS PORT [COMMAND] [ARG]...\n";
-  std::cout << "exio admin command-line client, version " PACKAGE_VERSION "\n\n";
-
-  std::cout << "Options:\n\n";
-  std::cout << "  -v\tlog exio problems; repeat twice for info, thrice for debug\n";
-}
-
 //----------------------------------------------------------------------
 
-//----------------------------------------------------------------------
 void process_cmd_line(int argc, char** argv)
 {
-
-/*
-          struct option {
-               const char *name;
-               int         has_arg;
-               int        *flag;
-               int         val;
-           };
-*/
-
-//  int digit_optind = 0;
-  static struct option longopts[] = {
-    {"help", no_argument, 0, 'h'},
-    {NULL, 0, NULL, 0}
-  };
-
-
-
-  while (true)
+  for (int i = 1; i < argc; ++i)
   {
-    /* "optind" is the index of the next element to be processed in argv.  It
-       is defined in the getopts header, and the system initializes this value
-       to 1.  The caller can reset it to 1 to restart scanning of the same
-       argv, or when scanning a new argument vector. */
 
-    // take a copy to remember value for after return from getopt_long()
-    int this_option_optind = optind ? optind : 1;
-    int longindex = 0;
-
-      // 'c' is the option character returned
-    int c = getopt_long(argc, argv,
-                        "hv",
-                        longopts, &longindex);
-
-    if (c == -1) break;
-
-    // _P_( c );
-    // _P_(this_option_optind);
-    // _P_(optind);
-
-    switch(c)
+    if (po.addr.empty())
     {
-      case 'v' : program_options.verbose++; break;
-      case 'h' : usage(); exit(0);
-      case '?' : {
-        std::cout << "invalid option: '"
-                  << argv[this_option_optind]<<"'\n";
-        exit(1);
-      }
-      default:
-      {
-        std::cout << "getopt_long() returned (dec) " << (unsigned int)(c) << "\n";
-          exit(1);
-      }
-
+      po.addr=argv[i];
     }
-
+    else if (po.port.empty())
+    {
+      po.port=argv[i];
+    }
   }
 
-  if (optind < argc) program_options.addr = argv[optind++];
-  if (optind < argc) program_options.port = argv[optind++];
-  if (optind < argc) program_options.cmd  = argv[optind++];
-  while (optind < argc) program_options.cmdargs.push_back(argv[optind++]);
-
-  if (program_options.addr.empty() or program_options.addr.empty())
+  if (po.addr.empty() or po.port.empty())
     die("please specify address and port");
-
 }
+
+
 
 //----------------------------------------------------------------------
 int main(const int argc, char** argv)
 {
+  g_pid = getpid();
+
+  /*
+    NEXT: for the admin io session, can we find the local socket?
+
+  */
+
   try
   {
     process_cmd_line(argc,argv);
@@ -628,9 +481,6 @@ int main(const int argc, char** argv)
     // TODO: allow the error level to be specified by config
 
     exio::ConsoleLogger::Levels loglevel = exio::ConsoleLogger::eNone;
-    if (program_options.verbose > 0 ) loglevel = exio::ConsoleLogger::eWarn;
-    if (program_options.verbose > 1 ) loglevel = exio::ConsoleLogger::eInfo;
-    if (program_options.verbose > 2 ) loglevel = exio::ConsoleLogger::eAll;
 
     exio::ConsoleLogger logger(exio::ConsoleLogger::eStderr, loglevel);
 
@@ -640,8 +490,8 @@ int main(const int argc, char** argv)
 
     /* Create a socket and connect */
 
-    int fd = connect_ipv4(program_options.addr.c_str(),
-                          program_options.port.c_str());
+    int fd = connect_ipv4(po.addr.c_str(),
+                          po.port.c_str());
     if (!fd) return 1;
 
 #if defined (IP_TOS) && defined (IPTOS_LOWDELAY) && defined (IPPROTO_IP)
@@ -672,14 +522,7 @@ int main(const int argc, char** argv)
         }
 #endif
 
-
-
-
-    // TODO: build up an admin service ID
-
-    AdminListener listener;
-
-    if (program_options.cmd.empty()) listener.show_unsol_messages(true);
+    AdminListener listener(fd);
 
     exio::AdminSession adminsession(appsvc, fd, &listener, 1);
 
@@ -692,52 +535,7 @@ int main(const int argc, char** argv)
     logon.root().put_field(exio::id::QN_serviceid, serviceid);
     logon.root().put_field(exio::id::QN_head_user, build_user_id());
 
-    if (not program_options.cmd.empty())
-    {
-      /* because we are going to send a command, lets include the
-       * no-automatic-subscription flag in the logon*/
-      logon.root().put_field(exio::id::QN_noautosub,
-                             exio::id::True);
-
-      /* We are sending a command. By default, indicate to the server that we
-       * want them to close our connection once the adim command completes. */
-      logon.root().put_field(QNAME(exio::id::head, exio::id::autoclose),
-                                   exio::id::True);
-    }
     adminsession.enqueueToSend( logon );
-
-
-    if ( not program_options.cmd.empty() )
-    {
-      /*
-       * Generate a message to represent a command request
-       */
-      sam::txMessage msg(exio::id::msg_request);
-
-      // head
-      msg.root().put_field(exio::id::QN_command, program_options.cmd);
-      sam::txContainer& head = msg.root().put_child(exio::id::head);
-
-      std::ostringstream os;
-      os << program_options.addr << ":" << program_options.port;
-      head.put_field(exio::id::dest, os.str());
-
-      head.put_field(exio::id::source, serviceid);
-      head.put_field(exio::id::user, build_user_id());
-      head.put_field(exio::id::reqseqno, "0");
-
-      // body
-      sam::txContainer& body = msg.root().put_child(exio::id::body);
-
-      // for legacy reasons, we also have to place the command into the messge
-      // body
-      body.put_field(exio::id::command, program_options.cmd);
-
-      add_arguments(body, program_options.cmdargs);
-
-      adminsession.enqueueToSend( msg );
-    }
-
 
     listener.wait_for_session_closure();
 
