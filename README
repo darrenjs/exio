@@ -5,6 +5,14 @@ new
 
 * added slow_consumer test tool, to debug issues with slow consumers
 
+1.4.2
+-----
+
+* moved AdminSession to a public header.  This is to allow client applications
+  to use exio for establishing connections.  This is first attempt at doing
+  this; might need to be changed, because perhaps the AdminSession has too
+  much clutter to be used in this standalone fashion.
+
 1.4.1
 -----
 

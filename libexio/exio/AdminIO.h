@@ -30,6 +30,7 @@
 namespace exio
 {
 class AppSvc;
+class AdminIOListener;
 
 struct QueuedItem
 {
@@ -133,18 +134,9 @@ class AtomicBool
 class AdminIO
 {
   public:
-    class Listener
-    {
-      public:
-        virtual void io_onmsg(const sam::txMessage& src) = 0;
-        virtual void io_closed() = 0;
-        virtual ~Listener() {}
-    };
-
-  public:
     explicit AdminIO(AppSvc& appsvc,
                      int fd,
-                     Listener *);
+                     AdminIOListener *);
     ~AdminIO();
 
     void enqueue(const QueuedItem& i);
@@ -199,7 +191,7 @@ class AdminIO
     } m_lwp;
 
     AppSvc& m_appsvc;
-    Listener * m_listener;
+    AdminIOListener * m_listener;
     int m_fd;
 
     AtomicBool m_is_stopping;  // true if stopping

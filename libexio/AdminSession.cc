@@ -19,11 +19,13 @@
 */
 #include "exio/AdminSession.h"
 #include "exio/AdminInterface.h"
+#include "exio/AdminIO.h"
 #include "exio/Logger.h"
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/utils.h"
 
+#include "mutex.h"
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -387,8 +389,31 @@ void AdminSession::housekeeping()
     enqueueToSend( hbmsg );
   }
 }
-
 //----------------------------------------------------------------------
-
+time_t        AdminSession::start_time() const
+{
+  return m_start;
+}
+//----------------------------------------------------------------------
+time_t        AdminSession::last_write() const
+{
+  return (m_io)? m_io->last_write():0;
+}
+//----------------------------------------------------------------------
+unsigned long AdminSession::bytes_out()  const
+{
+  return (m_io)? m_io->bytes_out():0;
+}
+//----------------------------------------------------------------------
+unsigned long AdminSession::bytes_in()   const
+{
+  return (m_io)? m_io->bytes_in():0;
+}
+//----------------------------------------------------------------------
+unsigned long AdminSession::bytes_pend() const
+{
+  return (m_io)? m_io->bytes_pending():0;
+}
+//----------------------------------------------------------------------
 
 } // namespace qm

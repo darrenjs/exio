@@ -18,6 +18,7 @@
     along with exio.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "exio/AdminIO.h"
+#include "exio/AdminIOListener.h"
 #include "exio/AdminInterface.h"
 #include "exio/Logger.h"
 #include "exio/sam.h"
@@ -86,7 +87,7 @@ AdminIO::ThreadIDs::ThreadIDs()
 
 //----------------------------------------------------------------------
 /* Constructor */
-AdminIO::AdminIO(AppSvc& appsvc,int fd, Listener * l)
+AdminIO::AdminIO(AppSvc& appsvc,int fd, AdminIOListener * l)
   :  m_appsvc(appsvc),
      m_listener( l ),
      m_fd(fd),

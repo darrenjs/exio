@@ -20,7 +20,7 @@
 #ifndef EXIO_ADMINSESSION_H
 #define EXIO_ADMINSESSION_H
 
-#include "exio/AdminIO.h"
+#include "exio/AdminIOListener.h"
 #include "exio/AdminSessionID.h"
 
 #include <list>
@@ -35,9 +35,11 @@ namespace exio
 {
 
 class AdminInterface;
+class AdminIO;
+class AppSvc;
 
 
-class AdminSession : public AdminIO::Listener
+class AdminSession : public AdminIOListener
 {
   public:
 
@@ -96,11 +98,11 @@ class AdminSession : public AdminIO::Listener
     void log_thread_ids(std::ostream&) const;
 
     // IO stats
-    time_t        start_time() const { return m_start; }
-    time_t        last_write() const { return (m_io)? m_io->last_write():0; }
-    unsigned long bytes_out()  const { return (m_io)? m_io->bytes_out():0; }
-    unsigned long bytes_in()   const { return (m_io)? m_io->bytes_in():0; }
-    unsigned long bytes_pend() const { return (m_io)? m_io->bytes_pending():0; }
+    time_t        start_time() const;
+    time_t        last_write() const;
+    unsigned long bytes_out()  const;
+    unsigned long bytes_in()   const;
+    unsigned long bytes_pend() const;
 
   private:
 

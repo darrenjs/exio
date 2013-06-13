@@ -16,7 +16,28 @@ NEXT
 ----
 
 
-* can we remove the m_sessions.lock?#
+* slow-consumer
+
+  -> using the new slow-consumer tool, set up a repeatible scenario, so that
+     we can have a server publishing data, connected to several slow
+     consumers.  Need to be able to monitor, via netstat and diags adin
+     command, the size of queued data.
+
+  -> introduce configuration for limiting the size of the queue.
+
+
+  -> recap: which of the two IO threads is responsible for closing the
+     connection?
+
+  -> the BIG UNKNOWN is how to close a session if the size is exceeded.
+     Currently, we close a session by placing special data on the queue.
+     However, we cannot take that approach now, because the queue will be
+     full.  So will likely need a new method, close_immediately(), which stops
+     socket IO even if there is pending data. This might require a new atomic
+     variable, or someting like that.
+
+
+* can we remove the m_sessions.lock?
 
   -> YES: but, we still will need synchronization in order to avoid the
      "reset-read" race condition
