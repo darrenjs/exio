@@ -129,11 +129,11 @@ class AdminSession : public AdminIOListener
      * might not be too reliable, because the underlying housekeeping timer
      * has around a 20 second precision. */
     int m_hb_intvl;
+    time_t m_hb_last;
 
     time_t    m_start;
 
     AdminIO * m_io;
-
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);

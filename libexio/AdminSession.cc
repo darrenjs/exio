@@ -176,7 +176,8 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_listener( l ),  // need store listener before IO started
     m_autoclose(false),
     m_hb_intvl(30),
-    m_start(time(NULL)),
+    m_hb_last(time(NULL)),
+    m_start( m_hb_last ),
     m_io( new AdminIO(m_appsvc, fd, this ))
 {
 }
@@ -376,17 +377,20 @@ void AdminSession::housekeeping()
 {
   if ((!m_io) or (m_hb_intvl==0)) return;
 
-  time_t lastactivity = m_io->last_write();
   time_t now = time(NULL);
 
-  // note, 'm_last_send' is more or less 'current time'
-  if (abs(now - lastactivity) >= m_hb_intvl)
+  // Note: we now send heartbeats periodically, irrespective of outbound
+  // activity on the session.  We are doing this because our heartbeats also
+  // serve as tests-requests, so the peer will take our heartbeat and reply to
+  // it.
+  if (abs(now - m_hb_last) >= m_hb_intvl)
   {
     // we are sending an unsolicited heartbeat, so, also include the
     // testrequest flag to request a reply from the peer.
     sam::txMessage hbmsg(id::heartbeat);
     hbmsg.root().put_field(id::QN_testrequest, id::True );
     enqueueToSend( hbmsg );
+    m_hb_last = now;
   }
 }
 //----------------------------------------------------------------------
