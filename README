@@ -1,11 +1,7 @@
 HISTORY
 =======
 
-new
-
-* added slow_consumer test tool, to debug issues with slow consumers
-
-1.4.2
+1.4.2 [in progress]
 -----
 
 * moved AdminSession to a public header.  This is to allow client applications
@@ -15,7 +11,11 @@ new
 
 * heartbeats are now sent irrespective of session activity.
 
-1.4.1
+* added slow_consumer test tool, to debug issues with slow consumers
+
+* txContainer supports merge(). Added as part of meta-update feature.
+
+1.4.1 [r118]
 -----
 
 * 'diags' command will now show the number of queued bytes, that are waiting

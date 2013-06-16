@@ -206,6 +206,36 @@ typedef std::list< txItem* >                 ItemList;
 typedef std::map<std::string, txField*>      FieldMap;
 typedef std::map<std::string, txContainer*>  ChildMap;
 
+/**
+ * Container of data objects.  A container contains two sets of data: a
+ * collection of simple fields; and a collection of child containers.  The
+ * formers are accessed via the various _field methods, the latter via the
+ * various _child methods.  Because of this separation between fields and
+ * children, an individual field-name can coexist as both a Field and a
+ * Container at the same time.
+ *
+ * In addition to storing a collection of Field objects and a collection of
+ * Container objects, the order in which objects have been added is stored,
+ * and is reflected several operations, eg, copy, tostream etc.
+ *
+ *
+ * Implemention notes
+ * ~~~~~~~~~~~~~~~~~~
+ *
+ * Currently the txContainer inherits from txItem.  This choice was motivated
+ * for two reasons: (1) to share implementation details; (2) to treat fields &
+ * containers in a generic manner.
+ *
+ * For (1), the really only thing shared is the std::string htat holds the
+ * name of the field/container.  So not much shared there, and not really a
+ * reason to keep txItem.
+ *
+ * For (2), this is used in places where we have to iterate over m_items. Eg
+ * when we delete all items, or if we are performing a copy, or a tostream
+ * etc. It is also used to maintain the ordering information, and so the
+ * m_items, which is the order data, contains pointers to the actual data.
+ *
+ */
 class txContainer : public txItem
 {
   public:
@@ -293,6 +323,7 @@ class txContainer : public txItem
     void clear();
 
     // Remove single item
+    // TODO: this should be changed to: remove_field() and remove_child().
     void remove(const std::string&);
 
   private:
