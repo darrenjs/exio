@@ -112,7 +112,7 @@ class txField;
 /*
   Implementation note: have removed the m_owner field, because (1) it was
   complicating the copy constructor and assignment operator, and (2) there was
-  no current use for it.oern
+  no current use for it.
 
 */
 
@@ -202,7 +202,7 @@ class txField : public txItem
 
 /* Keep things simpler by using map instead of multimap */
 typedef std::list< txItem* >                 ItemList;
-typedef std::map<std::string, txItem*>       ItemMap;
+//typedef std::map<std::string, txItem*>       ItemMap;
 typedef std::map<std::string, txField*>      FieldMap;
 typedef std::map<std::string, txContainer*>  ChildMap;
 
@@ -210,13 +210,15 @@ class txContainer : public txItem
 {
   public:
 
-    /* Constuction & clone */
+    /* Constuction, assignment, clone */
 
     txContainer() {}
     explicit txContainer(const std::string& name);
     txContainer(const txContainer&);
     virtual txContainer* clone() const;
     txContainer & operator=(const txContainer &);
+    void merge(const txContainer &);
+
 
     ~txContainer();
 
@@ -259,12 +261,11 @@ class txContainer : public txItem
 
     /* ----- Operations on member Containers ----- */
 
-    // put - these functions will only create a new child if an existing one
-    //       is not found. Otherwise, if a container exists, it is returned.
-    //       For add_child(const txContainer&), the new/existing child will be
-    //       copied from the parameter.
+    // insert new child container if not found
     txContainer& put_child(const std::string&);
-    txContainer& put_child(const txContainer&); // assign a copy
+
+    // insert a copy, overwriting any if already exists
+    txContainer& put_child(const txContainer&);
 
     // nested addition
     txContainer& put_child(const qname&); // find existing, else new
@@ -291,6 +292,9 @@ class txContainer : public txItem
     // Remove all child elements and fields
     void clear();
 
+    // Remove single item
+    void remove(const std::string&);
+
   private:
 
     void add_internally(txItem * f);
@@ -298,7 +302,7 @@ class txContainer : public txItem
     // Preserve the order in which each Item was added
     ItemList m_items;
 
-    ItemMap   m_item_map;
+//    ItemMap   m_item_map;
     FieldMap  m_field_map;
     ChildMap  m_child_map;
 };

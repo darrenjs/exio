@@ -684,7 +684,7 @@ void txContainer::add_internally(txItem * item)
   // returned to the client.
 
   m_items.push_back( item );
-  m_item_map.insert( std::make_pair(item->name(), item) );
+//  m_item_map.insert( std::make_pair(item->name(), item) );
 
   if (item->isContainer())
   {
@@ -771,7 +771,7 @@ txContainer & txContainer::operator=(const txContainer & rhs)
   txItem::operator=(rhs);
   // TODO: clear our lists  -- check: does this delete?
   m_items.clear();
-  m_item_map.clear();
+//  m_item_map.clear();
   m_field_map.clear();
   m_child_map.clear();
 
@@ -803,7 +803,6 @@ txContainer* txContainer::clone() const
 
   return newc;
 }
-
 
 //----------------------------------------------------------------------
 
@@ -876,7 +875,7 @@ void txContainer::clear()
 
   // now clear out our state
   m_items.clear();
-  m_item_map.clear();
+//  m_item_map.clear();
   m_field_map.clear();
   m_child_map.clear();
 }
@@ -1073,6 +1072,79 @@ const txContainer* txContainer::find_child(const qname& qn) const
   find_tree_const(current, name, qn);  // updates current & name
 
   return (current)? current->find_child( name ) : NULL;
+}
+
+//----------------------------------------------------------------------
+void txContainer::remove(const std::string& n)
+{
+  // TODO: once we are 100% certain a field cannot exist, at the same time, as
+  // both a field and a child, then can return if the field-check is
+  // successful. Update: we probably do want to allow field & child same name
+  // coexistence.
+
+  // TODO: instead of this method, probably want to have remove_child() and
+  // remove_field() and remove_any()
+
+  // look for a field
+  {
+    FieldMap::iterator f = m_field_map.find(n);
+    if (f != m_field_map.end())
+    {
+      delete f->second;
+      m_field_map.erase(f);
+      m_items.remove(f->second);
+    }
+  }
+
+  {
+    // look for a container
+    ChildMap::iterator c = m_child_map.find(n);
+    if (c != m_child_map.end())
+    {
+      delete c->second;
+      m_child_map.erase(c);
+      m_items.remove(c->second);
+    }
+  }
+}
+
+//----------------------------------------------------------------------
+
+void txContainer::merge(const txContainer& src)
+{
+  /* we loop over src.m_items, so that we add new items to this container in
+   * the order which were found in src */
+  for (ItemList::const_iterator i = src.m_items.begin();
+       i != src.m_items.end(); ++i)
+  {
+    txContainer * c = find_child((*i)->name());
+    //txField     * f = find_field((*i)->name());
+
+    /*
+      NOTE: if we add a container but a field already exists with that name,
+      there is no need to remove the field because a field & child can
+      co-exist with the same name.
+    */
+    if ((*i)->isContainer())
+    {
+      txContainer* src_container = dynamic_cast<txContainer*>(*i);
+
+      if (c!=NULL)
+      {
+        c->merge( * src_container ); // merge child containers
+      }
+      else
+      {
+        put_child(*src_container); // copy
+      }
+    }
+    else
+    {
+      txField* src_field = dynamic_cast<txField*>(*i);
+
+      put_field( *src_field );
+    }
+  } // loop over items
 }
 
 

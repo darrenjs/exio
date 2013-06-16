@@ -52,7 +52,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-noinst_PROGRAMS = slow_consumer$(EXEEXT)
+noinst_PROGRAMS = slow_consumer$(EXEEXT) sam_tests$(EXEEXT)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -67,6 +67,10 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
+am_sam_tests_OBJECTS = sam_tests.$(OBJEXT)
+sam_tests_OBJECTS = $(am_sam_tests_OBJECTS)
+sam_tests_LDADD = $(LDADD)
+sam_tests_DEPENDENCIES =
 am_slow_consumer_OBJECTS = slow_consumer.$(OBJEXT)
 slow_consumer_OBJECTS = $(am_slow_consumer_OBJECTS)
 slow_consumer_LDADD = $(LDADD)
@@ -84,8 +88,8 @@ CXXLD = $(CXX)
 CXXLINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(slow_consumer_SOURCES)
-DIST_SOURCES = $(slow_consumer_SOURCES)
+SOURCES = $(sam_tests_SOURCES) $(slow_consumer_SOURCES)
+DIST_SOURCES = $(sam_tests_SOURCES) $(slow_consumer_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -226,6 +230,7 @@ LDADD = -L../libexio -lexio $(LIBLS)
 
 # slow_consumer
 slow_consumer_SOURCES = slow_consumer.cc
+sam_tests_SOURCES = sam_tests.cc
 all: all-am
 
 .SUFFIXES:
@@ -269,6 +274,9 @@ clean-noinstPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
+sam_tests$(EXEEXT): $(sam_tests_OBJECTS) $(sam_tests_DEPENDENCIES) $(EXTRA_sam_tests_DEPENDENCIES) 
+	@rm -f sam_tests$(EXEEXT)
+	$(CXXLINK) $(sam_tests_OBJECTS) $(sam_tests_LDADD) $(LIBS)
 slow_consumer$(EXEEXT): $(slow_consumer_OBJECTS) $(slow_consumer_DEPENDENCIES) $(EXTRA_slow_consumer_DEPENDENCIES) 
 	@rm -f slow_consumer$(EXEEXT)
 	$(CXXLINK) $(slow_consumer_OBJECTS) $(slow_consumer_LDADD) $(LIBS)
@@ -279,6 +287,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sam_tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/slow_consumer.Po@am__quote@
 
 .cc.o:
