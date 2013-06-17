@@ -355,7 +355,7 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
 
 //----------------------------------------------------------------------
 
-void AdminSession::io_closed()
+void AdminSession::io_closed()  // callback, from IO
 {
   m_session_valid = false;
 

@@ -204,7 +204,7 @@ void AdminIO::socket_read_TEP()
   // termiante the write thread
   if (call_request_stop)  request_stop();
 
-  m_threads_complete.incr();
+  m_threads_complete.incr(); /* LAST INSTRUCTION OF THREAD */
 }
 //----------------------------------------------------------------------
 void AdminIO::read_from_socket()
@@ -253,8 +253,9 @@ void AdminIO::read_from_socket()
 
     if ( m_is_stopping ) return;
 
-    if (n == 0)
+    if (n == 0) // zero indicates end of file
     {
+      _INFO_(m_appsvc.log(), "eof when reading fd " << m_fd);
       throw io_error(); // empty imples eof
     }
     else if (n < 0)
@@ -407,7 +408,7 @@ void AdminIO::socket_write_TEP()
     /* catch all exceptions to prevent uncontrolled unwind / termination */
   }
 
-  m_threads_complete.incr();
+  m_threads_complete.incr(); /* LAST INSTRUCTION OF THREAD */
 }
 //----------------------------------------------------------------------
 void AdminIO::socket_write()
@@ -433,7 +434,7 @@ void AdminIO::socket_write()
       wait_and_pop( item_to_write );
 
       // Note: here we can't be sure of the blocking/non-blocking state of the
-      // socket
+      // socket. TODO: why not?
       size_t bytes_done = 0;
 
       // Note: reason we check m_is_stopping in the while condition is so that
@@ -453,6 +454,8 @@ void AdminIO::socket_write()
         char* buf       = item_to_write.buf()+bytes_done;
         size_t len      = item_to_write.size-bytes_done;
 
+        // TODO:slow_consumer - need this send() call not to block, so that we
+        // can timeouts in the case of a slow consumer.
         ssize_t n = send(fd, buf, len, flags);
 //        ssize_t n = write(fd, qi.buf()+bytes_done, qi.size-bytes_done);
         int const _err = errno;
@@ -466,7 +469,6 @@ void AdminIO::socket_write()
           _INFO_(m_appsvc.log(), os.str());
         }
 
-
         if (n == -1)
         {
           if (_err == EAGAIN or _err == EWOULDBLOCK)
@@ -478,7 +480,8 @@ void AdminIO::socket_write()
           {
             exit_reason = WRITE_ERR;
             _WARN_(m_appsvc.log(),
-                   "socket write failed: " << utils::strerror(_err) );
+                   "socket write failed, fd " << m_fd << ": "
+                   << utils::strerror(_err) );
             m_is_stopping = true;
           }
         }
@@ -496,7 +499,7 @@ void AdminIO::socket_write()
 
         m_is_stopping = true;  // will timeout the read thread
 
-        _DEBUG_(m_appsvc.log(), "Closing socket #" << m_fd);
+        _INFO_(m_appsvc.log(), "closing socket fd " << m_fd);
 
         struct linger linger;
         linger.l_onoff  = 1;
@@ -506,6 +509,10 @@ void AdminIO::socket_write()
                    (const char *) &linger,
                    sizeof(linger));
 
+        // TODO: here, before the close, is there a way to check the socket is
+        // still what we think it is?  I.e., test it is valid, and get its
+        // address. I.e., to remove the socket alias close bug, where we
+        // accidentally close a different connection.
         close( m_fd );
         socket_was_closed = true;
 
