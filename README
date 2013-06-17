@@ -1,7 +1,7 @@
 HISTORY
 =======
 
-1.4.2 [in progress]
+1.4.2 [r136]
 -----
 
 * moved AdminSession to a public header.  This is to allow client applications
