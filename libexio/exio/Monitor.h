@@ -61,6 +61,9 @@ class Monitor
                   const std::string& rowkey,
                   AdminInterface::Row&) const;
 
+    void copy_rowkeys(const std::string& tablename,
+                      std::list< std::string >&) const;
+
     bool copy_field(const std::string& tablename,
                     const std::string& rowkey,
                     const std::string& field,

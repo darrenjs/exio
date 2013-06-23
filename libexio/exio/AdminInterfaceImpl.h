@@ -108,6 +108,9 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
     bool has_table(const std::string& tablename) const;
 
+    void copy_rowkeys(const std::string& tablename,
+                      std::list< std::string >&) const;
+
     void copy_table(const std::string& tablename,
                     AdminInterface::Table&) const;
 

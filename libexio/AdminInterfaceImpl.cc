@@ -1332,4 +1332,10 @@ bool AdminInterfaceImpl::copy_field(const std::string& tablename,
 
 }
 //----------------------------------------------------------------------
+void AdminInterfaceImpl::copy_rowkeys(const std::string& tablename,
+                                      std::list< std::string >& dest) const
+{
+  m_monitor.copy_rowkeys(tablename, dest);
+}
+//----------------------------------------------------------------------
 } // namespace exio

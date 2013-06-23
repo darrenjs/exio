@@ -194,5 +194,13 @@ bool AdminInterface::copy_field(const std::string& tablename,
 {
   return m_impl->copy_field(tablename, rowkey, field, dest);
 }
+
+//----------------------------------------------------------------------
+
+void AdminInterface::copy_rowkeys(const std::string& tablename,
+                                  std::list< std::string >& dest) const
+{
+  m_impl->copy_rowkeys(tablename, dest);
+}
 //----------------------------------------------------------------------
 }

@@ -132,6 +132,8 @@ class DataTable
 
     void copy_row(const std::string& rowkey, AdminInterface::Row&) const;
 
+    void copy_rowkeys(std::list< std::string >& dest) const;
+
     bool copy_field(const std::string& rowkey,
                     const std::string& field,
                     std::string& dest) const;

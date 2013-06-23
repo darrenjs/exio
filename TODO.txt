@@ -16,7 +16,7 @@ NEXT
 ----
 
 
-* slow-consumer
+* slow-consumer  (see socket notes below)
 
   -> using the new slow-consumer tool, set up a repeatible scenario, so that
      we can have a server publishing data, connected to several slow
@@ -59,6 +59,43 @@ NEXT
 * why are locks needed?  In order to prevent a writer modifying a structure
   while there are other readers and writers using the structure.  Because,
   that can invalidate the structure.
+
+----------------------------------------------------------------------
+SOCKET NOTES  (AdminIO)
+-----------------------
+
+
+* class needs to be cleaned up
+
+* need to document the design, ie, coordinated closure comes from the write
+  thread, and there are deliberate efforts to coordinate the shutdown of
+  threads..
+
+* try to remove the use of exceptions, since I've seen the trouble these can
+  cause!
+
+* why is there a comment about the socket perhaps being non-blocking?
+
+* standardise the socket logging, such that the fd number is always included
+  in the message
+
+* note down the various test situations:
+
+  - slow consumer, ie, enqueue data reached maximum, and so socket must be
+    immediately terminated, with data loss
+
+  - coordinated closure, after last data sent.
+
+  - read() flow control
+
+  - write() flow control
+
+  - read error / end of stream
+
+  - write error / end of stream
+
+  - object deleted, but with call to request stop
+
 
 
 ----------------------------------------------------------------------

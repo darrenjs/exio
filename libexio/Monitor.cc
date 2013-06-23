@@ -420,5 +420,24 @@ bool Monitor::copy_field(const std::string& tablename,
   else
     return false;
 }
+//----------------------------------------------------------------------
+void Monitor::copy_rowkeys(const std::string& tablename,
+                           std::list< std::string >& dest) const
+{
+  /* Note: we hold the m_mutex for the full duration of the function, ie, we
+   * continue to hold it after the complete of the m_tables map lookup.  We
+   * need to do this so that the entry, which is pointer to resource, remains
+   * valid for our use.  So holding the lock prevents another thread from
+   * deleting our resource.
+   *
+   */
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  TableCollection::const_iterator iter = m_tables.find(tablename);
+
+  if (iter != m_tables.end())
+  {
+    iter->second->copy_rowkeys(dest);
+  }
+}
 
 } // namespace exio

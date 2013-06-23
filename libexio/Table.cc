@@ -809,6 +809,17 @@ size_t DataTable::size() const
   return s;
 }
 
+//----------------------------------------------------------------------
+void DataTable::copy_rowkeys(std::list< std::string >& dest) const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
+
+  for (std::vector< DataRow >::const_iterator it = m_rows.begin();
+       it != m_rows.end(); ++it)
+  {
+    dest.push_back(it->rowkey());
+  }
+}
 //======================================================================
 
 DataRow::DataRow(const std::string& rowkey,
