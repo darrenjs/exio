@@ -264,70 +264,37 @@ void DataTable::_nolock_publish_update(std::list<TableEventPtr>& events)
       if (ev->type == TableEvent::eRowMultiUpdate)
       {
         RowMultiUpdate* rev = dynamic_cast<RowMultiUpdate*>(ev);
-
         rev->serialise(msgs);
-        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-             mit != msgs.end(); ++mit)
-        {
-
-          for (std::vector<SID>::iterator s = subs.begin();
-               s != subs.end(); ++s)
-          {
-            m_ai->send_one(*mit, *s);
-          }
-        }
       }
       else if (ev->type == TableEvent::eTableCleared)
       {
         TableCleared* rev = dynamic_cast<TableCleared*>(ev);
-
         rev->serialise(msgs);
-        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-             mit != msgs.end(); ++mit)
-        {
-
-          for (std::vector<SID>::iterator s = subs.begin();
-               s != subs.end(); ++s)
-          {
-            m_ai->send_one(*mit, *s);
-          }
-        }
       }
       else if (ev->type == TableEvent::eRowRemoved)
       {
         RowRemoved* rev = dynamic_cast<RowRemoved*>(ev);
-
         rev->serialise(msgs);
-        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-             mit != msgs.end(); ++mit)
-        {
-
-          for (std::vector<SID>::iterator s = subs.begin();
-               s != subs.end(); ++s)
-          {
-            m_ai->send_one(*mit, *s);
-          }
-        }
       }
       else if (ev->type == TableEvent::ePCMD)
       {
         PCMDEvent* rev = dynamic_cast<PCMDEvent*>(ev);
-
         rev->serialise(msgs);
+      }
+      // TODO: need to add a serialiser for NewColumn event
+    } // for loop
 
-        for (std::list<sam::txMessage>::iterator mit = msgs.begin();
-             mit != msgs.end(); ++mit)
-        {
-          for (std::vector<SID>::iterator s = subs.begin();
-               s != subs.end(); ++s)
-          {
-            m_ai->send_one(*mit, *s);
-          }
-        }
+    // now send to each subscriber
+    for (std::list<sam::txMessage>::iterator mit = msgs.begin();
+         mit != msgs.end(); ++mit)
+    {
+      for (std::vector<SID>::iterator s = subs.begin();
+           s != subs.end(); ++s)
+      {
+        m_ai->send_one(*mit, *s);
       }
     }
   }
-
 
   /* cleanup and exit */
   // TODO: I should be deleting the objecst here????
@@ -350,6 +317,10 @@ void DataTable::update_row(const std::string & rowkey,
   for (std::map<std::string, std::string>::const_iterator fit = fields.begin();
        fit != fields.end(); ++fit)
   {
+    // skip reserved rows - we do not allow these to be updated
+    if (fit->first == id::row_key
+        or fit->first == id::row_last) continue;
+
     add_column_NOLOCK(fit->first, events);
   }
 
@@ -381,6 +352,7 @@ void DataTable::add_column_NOLOCK(const std::string & column,
 
   if (adding_column)
   {
+    // TODO: need to add a serialiser for NewColumn
     events.push_back( new NewColumn( m_table_name, column ));
     m_columns.push_back( column );
 
@@ -389,9 +361,11 @@ void DataTable::add_column_NOLOCK(const std::string & column,
     for (size_t c = 0; c < m_columns.size(); ++c)
       m_column_index[ m_columns[c] ] = c;
 
-    // add column to every row
+    // add column to every row - a default value is required, for which the
+    // empty string is used.
     std::map<std::string, std::string> fields;
     fields[ column ] = "";
+
     for (std::vector< DataRow >::iterator iter = m_rows.begin();
          iter != m_rows.end(); ++iter)
     {
@@ -860,6 +834,10 @@ bool DataRow::update_fields(const std::map<std::string, std::string>& fields,
   for (std::map<std::string, std::string>::const_iterator up = fields.begin();
        up != fields.end(); ++up)
   {
+    // skip reserved rows - we do not allow these to be updated
+    if (up->first == id::row_key
+        or up->first == id::row_last) continue;
+
     // Get the existing value.  We will not update the field if the
     // value is the same
     Fields::iterator ours = m_fields.find( up->first );
