@@ -246,7 +246,7 @@ class AdminCommand
                  std::map<std::string,std::string> attrs = EmptyAttrs)
       : m_name(name),
         m_shorthelp(help),
-        m_longhelp(longhelp),
+        m_longhelp(longhelp.empty()? help:longhelp),
         m_target( new _ObjectTarget(callback) ),
         m_attrs(attrs)
     {
@@ -265,7 +265,7 @@ class AdminCommand
                  std::map<std::string,std::string> attrs = EmptyAttrs)
       : m_name(__name),
         m_shorthelp(help),
-        m_longhelp(longhelp),
+        m_longhelp(longhelp.empty()? help:longhelp),
         m_target(new _MemberTarget<T>( pmf, obj) ),
         m_attrs(attrs)
 

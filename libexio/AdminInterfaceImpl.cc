@@ -773,27 +773,43 @@ AdminResponse AdminInterfaceImpl::admincmd_subscribe(AdminRequest& req)
 AdminResponse AdminInterfaceImpl::admincmd_help(
   AdminRequest& request)
 {
-  std::list<std::string> admins;
+  cpp11::unique_lock<cpp11::mutex> guard(m_admins.lock);
 
-  AdminResponse resp(request.reqseqno);
-
-
+  if (request.args().empty())
   {
-     cpp11::unique_lock<cpp11::mutex> guard(m_admins.lock);
+    // no args, so just list all admins
+    std::list<std::string> admins;
+    AdminResponse resp(request.reqseqno);
 
-        for (std::map<std::string,AdminCommand>::iterator i =
-               m_admins.items.begin();
-             i != m_admins.items.end(); ++i)
-        {
-          admins.push_back( i->first );
-        }
+    for (std::map<std::string,AdminCommand>::iterator i =
+           m_admins.items.begin();
+         i != m_admins.items.end(); ++i)
+    {
+      admins.push_back( i->first );
+    }
+
+    exio::add_rescode(resp.msg, 0);
+    exio::set_pending(resp.msg, false);
+    exio::formatreply_simplelist(resp.body(), admins, "admin");
+    return resp;
+  }
+  else
+  {
+
+    std::map<std::string,AdminCommand>::iterator i = m_admins.items.find( request.args()[0] );
+    if (i != m_admins.items.end())
+    {
+      return AdminResponse::success(request.reqseqno,
+                                    i->second.longhelp());
+    }
+    else
+    {
+      return AdminResponse::error(request.reqseqno,
+                                  id::err_admin_not_found,
+                                  "admin not found");
+    }
   }
 
-  exio::add_rescode(resp.msg, 0);
-  exio::set_pending(resp.msg, false);
-  exio::formatreply_simplelist(resp.body(), admins, "admin");
-
-  return resp;
 }
 
 //----------------------------------------------------------------------

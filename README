@@ -6,10 +6,13 @@ IN PROGRESS
 -----------
 
 * fixed new-column bug, where a row was updated multiple times when a new
-  column was added (and added example program to test)
+  column was added (and added example program to test) r140
 
-* fixed bug where RowKey and RowLastUpdated could be modified by client.
+* fixed bug where RowKey and RowLastUpdated could be modified by client. r140
 
+* admin help can now take name of another admin, to display the long help
+
+* result codes values from admin commands are now passed out of the admin main
 
 1.4.2 [r136]
 -----

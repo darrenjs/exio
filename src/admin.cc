@@ -75,13 +75,13 @@ class AdminListener : public exio::AdminSession::Listener
     virtual void session_closed(exio::AdminSession&);
 
 
-    void wait_for_session_closure();
+    int wait_for_session_closure();
 
     void show_unsol_messages(bool b) { m_show_unsol = b; }
 
   private:
 
-    void trigger_close();
+    void trigger_close(int);
 
     void handle_table_response(const sam::txContainer* body);
 
@@ -94,18 +94,21 @@ class AdminListener : public exio::AdminSession::Listener
     cpp11::mutex m_mutex;
     bool m_session_open;
     bool m_show_unsol;
+    int  m_retval;
 };
 //----------------------------------------------------------------------
 AdminListener::AdminListener()
   : m_session_open( true ),
-    m_show_unsol(false)
+    m_show_unsol(false),
+    m_retval(0)
 {
 }
 //----------------------------------------------------------------------
-void AdminListener::trigger_close()
+void AdminListener::trigger_close(int retval)
 {
   cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
   m_session_open = false;
+  m_retval = retval;
   m_convar.notify_one();
 }
 //----------------------------------------------------------------------
@@ -207,14 +210,18 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
 
   int retval = (rescode)? atoi( rescode->value().c_str() ) : -1;
 
-  std::cout << retval;
   if (retval == 0)
-    std::cout << " OK, ";  // Inspired by ZX Spectrum format!!! ;-)
+  {
+//    std::cout << retval;
+//    std::cout << " OK, ";  // Inspired by ZX Spectrum format!!! ;-)
+  }
   else
+  {
+    std::cout << retval;
     std::cout << " FAIL, ";
+  }
 
-  if (restext) std::cout << restext->value();
-  std::cout << '\n';  // terminate the response summary
+  if (restext) std::cout << restext->value() << "\n"; // terminate the response summary
 
   /* process head */
   const sam::txContainer * body = msg.root().find_child("body");
@@ -268,7 +275,7 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
 
   if ( not exio::has_pending(msg) )
   {
-    trigger_close();
+    trigger_close(retval);
     return;
   }
 }
@@ -291,7 +298,7 @@ void AdminListener::session_msg_received(const sam::txMessage& msg,
   // Does this look like a bye ?
   if (msg.type() == exio::id::msg_bye )
   {
-    trigger_close();
+    trigger_close(0);
     return;
   }
 
@@ -330,10 +337,12 @@ void AdminListener::session_closed(exio::AdminSession& /*session*/)
 }
 
 //----------------------------------------------------------------------
-void AdminListener::wait_for_session_closure()
+int AdminListener::wait_for_session_closure()
 {
   cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
   while ( m_session_open ) { m_convar.wait(lock); }
+
+  return m_retval;
 }
 
 //----------------------------------------------------------------------
@@ -739,9 +748,7 @@ int main(const int argc, char** argv)
     }
 
 
-    listener.wait_for_session_closure();
-
-    exit( 0 );
+    return listener.wait_for_session_closure();
   }
   catch (const std::exception& e)
   {
