@@ -54,7 +54,7 @@ struct ProgramOptions
     std::string cmd;
     std::list< std::string > cmdargs;
 
-    int verbose; // count of '-v'
+    int verbose; // count of '-d'
 
     ProgramOptions()
       : verbose(0)
@@ -550,9 +550,15 @@ void usage()
   std::cout << "exio admin command-line client, version " PACKAGE_VERSION "\n\n";
 
   std::cout << "Options:\n\n";
-  std::cout << "  -v\tlog exio problems; repeat twice for info, thrice for debug\n";
+  std::cout << "  -d\tlog exio problems; repeat twice for info, thrice for debug\n";
+  std::cout << "  -v\tversion info\n";
 }
 
+//----------------------------------------------------------------------
+void version()
+{
+  std::cout << PACKAGE_VERSION "\n";
+}
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
@@ -571,6 +577,7 @@ void process_cmd_line(int argc, char** argv)
 //  int digit_optind = 0;
   static struct option longopts[] = {
     {"help", no_argument, 0, 'h'},
+    {"version", no_argument, 0, 'v'},
     {NULL, 0, NULL, 0}
   };
 
@@ -589,7 +596,7 @@ void process_cmd_line(int argc, char** argv)
 
       // 'c' is the option character returned
     int c = getopt_long(argc, argv,
-                        "hv",
+                        "hdv",
                         longopts, &longindex);
 
     if (c == -1) break;
@@ -600,8 +607,9 @@ void process_cmd_line(int argc, char** argv)
 
     switch(c)
     {
-      case 'v' : program_options.verbose++; break;
+      case 'd' : program_options.verbose++; break;
       case 'h' : usage(); exit(0);
+      case 'v' : version(); exit(0);
       case '?' : {
         std::cout << "invalid option: '"
                   << argv[this_option_optind]<<"'\n";
