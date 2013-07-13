@@ -189,7 +189,7 @@ void AdminIO::socket_read_TEP()
              << utils::strerror(ioerr._errno) );
     }
   }
-  catch (std::runtime_error& e)
+  catch (std::exception& e)
   {
     _WARN_(m_appsvc.log(), "socket read failed: " << e.what());
   }

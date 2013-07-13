@@ -559,19 +559,17 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   }
   catch (AdminError & e)
   {
-    // TODO: need to generalise the error codes
-    std::cout << "admin failed: " << e.what() << "\n"; // TODO: remove?
+    _WARN_(m_logsvc, "admin failed: " << e.what());
     resp = AdminResponse::error(reqseqno, e.code(), e.what());
   }
-  catch (std::runtime_error & e)
+  catch (std::exception & e)
   {
-    // TODO: need to generalise the error codes
-    std::cout << "admin failed: " << e.what() << "\n"; // TODO: remove?
+    _WARN_(m_logsvc, "admin failed: " << e.what());
     resp = AdminResponse::error(reqseqno, id::err_admin_not_found,e.what());
   }
   catch (...)
   {
-    // TODO: need to use
+    _WARN_(m_logsvc, "admin failed: unknown exception caught");
     resp = AdminResponse::error(reqseqno, id::err_unknown,
                                 "unknown admin error");
   }

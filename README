@@ -21,7 +21,9 @@ IN PROGRESS
   convention for tableupdate. This allows the admin binary to present the
   collection of rows in the order intended by the server. r142
 
-* list of admins is presented in case-insensitive order
+* list of admins is presented in case-insensitive order. r143
+
+* --version option to admin. r144
 
 1.4.2 [r136]
 -----
