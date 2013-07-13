@@ -166,7 +166,7 @@ void formatreply_simplelist(sam::txContainer& body,
        iter != values.end(); ++iter)
   {
     memset(buf, 0, sizeof(buf));
-    snprintf(buf, sizeof(buf)-1, "%zu", rowindex++);
+    snprintf(buf, sizeof(buf)-1, "%s%zu", id::row_prefix.c_str(), rowindex++);
     sam::txContainer & row = tableupdate.put_child(buf);
     row.put_field(id::row_key, buf);
     row.put_field(value_column_name, *iter);

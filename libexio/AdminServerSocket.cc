@@ -187,8 +187,6 @@ AdminServerSocket::AdminServerSocket(AdminInterfaceImpl* ai)
 {
   /* CAUTION: don't try to use the m_ai parameter in here, because that object
    * itself it likely to still be under initialisation. */
-
-  create_listen_socket(); // TODO: should maybe go into a start-method, due to caution above
 }
 
 //----------------------------------------------------------------------
@@ -222,6 +220,8 @@ void AdminServerSocket::log_thread_ids(std::ostream& os) const
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
+  create_listen_socket();
+
   m_threadid  = syscall(SYS_gettid);
   m_pthreadid = pthread_self();
   std::ostringstream os;

@@ -45,7 +45,9 @@ class AdminInterface
 
     const std::string& serviceid() const;
 
-    // Start the interface
+    /* Start the interface.  Creates a passive socket for accepting client
+     * connections, and a dedicated thread for creating new sessions when
+     * clients connect. Returns immediately. */
     void start();
 
     // Stop the interface

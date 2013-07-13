@@ -10,9 +10,16 @@ IN PROGRESS
 
 * fixed bug where RowKey and RowLastUpdated could be modified by client. r140
 
-* admin help can now take name of another admin, to display the long help
+* admin help can now take name of another admin, to display the long help. r141
 
-* result codes values from admin commands are now passed out of the admin main
+* result codes values from admin commands are now passed out of the admin
+  main. r141
+
+* server socket is now created in the admin start() method.
+
+* synthetic tables, used in reponses, use row_ prefix in tables, which is the
+  convention for tableupdate. This allows the admin binary to present the
+  collection of rows in the order intended by the server.
 
 1.4.2 [r136]
 -----

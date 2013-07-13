@@ -169,14 +169,18 @@ void AdminListener::handle_table_response(const sam::txContainer* body)
 
   if (tableupdate)
   {
-    // iterate over all the rows
-    for (sam::ChildMap::const_iterator citer = tableupdate->child_begin();
-         citer != tableupdate->child_end(); ++citer)
+    size_t rowcount = 0;
+    const sam::txField * f = tableupdate->find_field(exio::id::rows);
+    if (f) rowcount = atoi( f->value().c_str() );
+
+    for (size_t r = 0; r < rowcount; ++r)
     {
+      std::ostringstream os;
+      os << exio::id::row_prefix << r;
+      const sam::txContainer * child  = tableupdate->find_child(os.str());
+      if (!child) continue;
+
       bool usedelim = false;
-
-      const sam::txContainer* child = citer->second;
-
 
       // iterate over know columns
       for (VSIter it = columns.begin(); it != columns.end(); ++it)
