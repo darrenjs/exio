@@ -102,6 +102,9 @@ SOCKET NOTES  (AdminIO)
 ALL
 ---
 
+* Consider added ordering information to txContainer, so that the order in
+  which items are added can be later retrieved.
+
 * [EASY] There are now two places where username is provided: at logon, and on
   each command.  This is for legacy reasons.  However, if a useranem was
   provided at logon, then we should not permit later admin commands to change

@@ -19,7 +19,9 @@ IN PROGRESS
 
 * synthetic tables, used in reponses, use row_ prefix in tables, which is the
   convention for tableupdate. This allows the admin binary to present the
-  collection of rows in the order intended by the server.
+  collection of rows in the order intended by the server. r142
+
+* list of admins is presented in case-insensitive order
 
 1.4.2 [r136]
 -----

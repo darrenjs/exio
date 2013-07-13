@@ -37,6 +37,13 @@
 namespace exio {
 
 //----------------------------------------------------------------------
+// comparison, not case sensitive.
+bool compare_nocase(std::string lhs, std::string rhs)
+{
+  return strcasecmp(lhs.c_str(), rhs.c_str()) < 0;
+}
+
+//----------------------------------------------------------------------
 
 AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
   : m_appsvc(ai->appsvc()),
@@ -788,6 +795,8 @@ AdminResponse AdminInterfaceImpl::admincmd_help(
       admins.push_back( i->first );
     }
 
+    admins.sort( compare_nocase );
+
     exio::add_rescode(resp.msg, 0);
     exio::set_pending(resp.msg, false);
     exio::formatreply_simplelist(resp.body(), admins, "admin");
@@ -795,7 +804,6 @@ AdminResponse AdminInterfaceImpl::admincmd_help(
   }
   else
   {
-
     std::map<std::string,AdminCommand>::iterator i = m_admins.items.find( request.args()[0] );
     if (i != m_admins.items.end())
     {
@@ -809,7 +817,6 @@ AdminResponse AdminInterfaceImpl::admincmd_help(
                                   "admin not found");
     }
   }
-
 }
 
 //----------------------------------------------------------------------
