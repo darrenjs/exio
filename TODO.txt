@@ -37,6 +37,12 @@ NEXT
      variable, or someting like that.
 
 
+* move the Atomic classes from their current location, and into the libcpp
+  stuff.  Also rename to match the C++11 eqivalients, and, use the same method
+  names as them.
+
+* need a new constructor to AdminCommand, which can take a global function
+
 * can we remove the m_sessions.lock?
 
   -> YES: but, we still will need synchronization in order to avoid the

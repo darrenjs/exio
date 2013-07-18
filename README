@@ -25,6 +25,8 @@ IN PROGRESS
 
 * --version option to admin. r144
 
+* added test function to the example server for sending large messages
+
 1.4.2 [r136]
 -----
 
