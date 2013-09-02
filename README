@@ -7,7 +7,7 @@ IN PROGRESS
 
 
 
-1.4.3 - 02/09/13 - r153
+1.4.3 - 02/09/13 - r154
 -----
 
 * fixed new-column bug, where a row was updated multiple times when a new
