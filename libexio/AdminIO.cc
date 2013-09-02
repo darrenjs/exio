@@ -47,6 +47,106 @@ namespace exio {
       io_error(int err): _errno(err), _eof(false) {}
   };
 
+
+//======================================================================
+class ReadBuffer
+{
+  public:
+
+    ReadBuffer()
+      : m_buf_cap(4096 /* initial size */),
+        m_buf(new char[m_buf_cap])
+    {
+      zero();
+    }
+
+    ~ReadBuffer()
+    {
+      delete m_buf;
+    }
+
+    void zero()
+    {
+      memset(m_buf, 0, m_buf_cap);
+      m_bytesavail = 0;
+      m_rp         = 0;
+    }
+
+    size_t capacity() const { return m_buf_cap; }
+
+    char* wp() const { return m_buf + m_bytesavail; }
+
+    size_t space_remain() const { return m_buf_cap - m_bytesavail; }
+
+    size_t bytesavail() const { return m_bytesavail; }
+
+    size_t grow()
+    {
+      signed long long extra = m_buf_cap*0.5;
+      if (extra == 0) extra = 1;
+
+      signed long long new_cap = m_buf_cap + extra;  // could overflow
+
+      if (new_cap < m_buf_cap || new_cap <= 0)
+      {
+        std::ostringstream os;
+        os << "Failed to allocate extra " << extra << " bytes for socket buffer growth. Current capacity=" << m_buf_cap;
+        throw std::runtime_error(os.str().c_str());
+      }
+
+      char* new_buf = NULL;
+
+      try
+      {
+        new_buf = new char[new_cap];
+      }
+      catch (const std::bad_alloc& e)
+      {
+        new_buf = NULL;
+      }
+
+      if (new_buf == NULL)
+      {
+        std::ostringstream os;
+        os << "Failed to allocate " << new_cap << " bytes for socket buffer growth";
+        throw std::runtime_error(os.str().c_str());
+      }
+
+      memset(new_buf, 0, new_cap);
+      memcpy(new_buf, m_buf, m_buf_cap);
+
+      delete [] m_buf;
+      m_buf     = new_buf;
+      m_buf_cap = new_cap;
+
+      return extra;
+    }
+
+    void incr_bytesavail(int t) { m_bytesavail += t; }
+
+    /* Any used bytes in the buffer are moved to the start of the array. */
+    void shift_pending_to_array_start()
+    {
+      if (m_bytesavail > 0 and m_rp) memmove(m_buf, m_buf+m_rp, m_bytesavail);
+      m_rp = 0;
+    }
+
+    const char* rp() const { return m_buf+m_rp; }
+
+    void consume(size_t n) { m_rp += n;  m_bytesavail -= n; }
+
+  private:
+    ReadBuffer(const ReadBuffer&);
+    ReadBuffer& operator=(const ReadBuffer&);
+
+    signed long long m_buf_cap;
+    char*  m_buf;
+    size_t m_bytesavail;
+    size_t m_rp;
+};
+
+//======================================================================
+
 // std::string string_error(int e)
 // {
 //   std::string retval;
@@ -75,6 +175,29 @@ namespace exio {
 //   return "unknown";
 // }
 
+
+//----------------------------------------------------------------------
+
+QueuedItem::QueuedItem()
+  :  size(0),
+     flags(0)
+{
+}
+
+const char* QueuedItem::buf() const
+{
+  return m_sb.msg_start();
+}
+
+//----------------------------------------------------------------------
+
+void QueuedItem::release()  // better to just use the constructor?
+{
+  size  = 0;
+  flags = 0;
+}
+
+
 //----------------------------------------------------------------------
 AdminIO::ThreadIDs::ThreadIDs()
   : reader(0),
@@ -101,6 +224,11 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, AdminIOListener * l)
      m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),
      m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this))
 {
+  if (appsvc.log() and appsvc.log()->want_debug())
+  {
+    m_log_io_events = true;
+  }
+
   // before we return, lets try to wait a little while so that the thread IDs
   // of the socket reader & writer threads get assigned
   int loops = 0;
@@ -189,9 +317,9 @@ void AdminIO::socket_read_TEP()
              << utils::strerror(ioerr._errno) );
     }
   }
-  catch (std::exception& e)
+  catch (const std::exception& e)
   {
-    _WARN_(m_appsvc.log(), "socket read failed: " << e.what());
+    _WARN_(m_appsvc.log(), "client handler failed: " << e.what());
   }
   catch (...)
   {
@@ -207,17 +335,29 @@ void AdminIO::socket_read_TEP()
   m_threads_complete.incr(); /* LAST INSTRUCTION OF THREAD */
 }
 //----------------------------------------------------------------------
+/*
+
+#0   in exio::AdminIO::read_from_socket ()
+#1   in exio::AdminIO::socket_read_TEP (this=0x61b210) at ../../exio/libexio/AdminIO.cc:339
+#2   in cpp11::thread::_MemberImpl<exio::AdminIO>::_M_run (this=0x61b490)
+    at ../../exio/libcpp11/thread.h:111
+#3   in cpp11::execute_native_thread_routine (__p=0x61b490) at ../../exio/libcpp11/thread.cc:40
+#4   in start_thread (arg=0x7ffff6d11700) at pthread_create.c:308
+#5   in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:112
+
+
+
+*/
 void AdminIO::read_from_socket()
 {
   // Read from the socket
-  char buf[READ_BUF_SIZE];
-  bzero(buf, READ_BUF_SIZE);
 
-  sam::SAMProtocol samp;
+  // char buf[READ_BUF_SIZE];
+  ReadBuffer buf;
+  buf.zero();
+
+  sam::SAMProtocol samp(m_appsvc);
   sam::txMessage msg;
-
-  // number of bytes in buf[] waiting to be processed
-  size_t bytesavail = 0;
 
   while (true)
 
@@ -230,14 +370,29 @@ void AdminIO::read_from_socket()
     while (! m_is_stopping and !read_timeo(m_fd, 1, 0)) {};
     if ( m_is_stopping ) return;
 
-    if (bytesavail == READ_BUF_SIZE)
+    if (buf.space_remain() == 0)
+    {
+      size_t extra_bytes = buf.grow();
+
+      if (extra_bytes == 0)
+      {
+        _ERROR_(m_appsvc.log(), "socket read buffer full, and not able to obtain more memory");
+      }
+
+      std::ostringstream os;
+      os << "read buffer grown by " << extra_bytes << " bytes, capacity="
+         << buf.capacity() << ", space=" << buf.space_remain();
+      _DEBUG_(m_appsvc.log(), os.str());
+    }
+
+    if (buf.space_remain() == 0)
     {
       //_INFO_(m_appsvc.log(), "bytesavail  " << bytesavail << " - buffer full");
       throw std::runtime_error("input buffer full");
     }
 
-    char* wp = buf + bytesavail; // write pointer
-    ssize_t n = read( m_fd, wp, (READ_BUF_SIZE - bytesavail) );
+    char* const wp = buf.wp(); // write pointer
+    ssize_t n = read( m_fd, wp, buf.space_remain() );
     int const _err = errno;
 
     if (n>0) m_bytesin += n;
@@ -248,7 +403,13 @@ void AdminIO::read_from_socket()
       os << "read() " << n
          << ", errno " << _err
          << " (" << utils::strerror(_err) << ")";
-      _INFO_(m_appsvc.log(), os.str());
+
+      if (n)
+      {
+        std::string raw(wp, n);
+        os << ", bytes '" << raw << "'";
+      }
+      _DEBUG_(m_appsvc.log(), os.str());
     }
 
     if ( m_is_stopping ) return;
@@ -263,29 +424,29 @@ void AdminIO::read_from_socket()
       throw io_error( _err );
     }
 
-    bytesavail += n; // increase count of waiting bytes
+    buf.incr_bytesavail(n); // increase count of waiting bytes
 
-    char* rp = buf;  // read pointer
-
-    while ( true )
+    while ( buf.bytesavail() )
     {
+      int msg_count = 0;
       size_t consumed = 0;
       try
       {
-        consumed = samp.decodeMsg(msg, rp, rp+bytesavail);
+        consumed = samp.decodeMsg(msg, msg_count, buf.rp(), buf.rp()+buf.bytesavail());
       }
       catch (const std::exception& e)
       {
-        _ERROR_(m_appsvc.log(), "Received bad data. Closing connection.");
+        _ERROR_(m_appsvc.log(),
+                "Closing connection due to protocol error: " << e.what());
 
         // send error reply
         sam::txMessage msg("badmsg");
-        sam::SAMProtocol protocol;
+        sam::SAMProtocol protocol(m_appsvc);
 
         QueuedItem qi;
         try
         {
-          qi.size = protocol.encodeMsg(msg, qi.buf(), qi.capacity());
+          qi.size = protocol.encodeMsg(msg, qi.sb());
           enqueue( qi );
         }
         catch (sam::OverFlow& err)
@@ -298,8 +459,9 @@ void AdminIO::read_from_socket()
 
       if (consumed > 0)
       {
-        if (m_listener)
+        if (m_listener and msg_count > 0)
         {
+          // Note: only handling 1 msg at a time
           try {
             m_listener->io_onmsg( msg );
           }
@@ -314,8 +476,8 @@ void AdminIO::read_from_socket()
           }
         }
         // consume the data from our buffer
-        rp         += consumed;
-        bytesavail -= consumed;
+        buf.consume( consumed );
+        _DEBUG_(m_appsvc.log(), "consumed " << consumed << " bytes");
       }
 
       // Only break out of loop if no bytes were consumed. If we processed at
@@ -325,8 +487,7 @@ void AdminIO::read_from_socket()
     }
 
     /* Any used bytes in the buffer are moved to the start of the array. */
-    if (bytesavail > 0 and rp > buf) memmove(buf, rp, bytesavail);
-    bzero(buf+bytesavail, READ_BUF_SIZE - bytesavail);
+    buf.shift_pending_to_array_start();
   }
 }
 //----------------------------------------------------------------------
@@ -451,7 +612,7 @@ void AdminIO::socket_write()
         /* Note: now using send() instead of write(), so that we can prevent
          * SIGPIPE from being raised */
         const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
-        char* buf       = item_to_write.buf()+bytes_done;
+        const char* buf = item_to_write.buf()+bytes_done;
         size_t len      = item_to_write.size-bytes_done;
 
         // TODO:slow_consumer - need this send() call not to block, so that we
@@ -466,7 +627,7 @@ void AdminIO::socket_write()
           os << "send() " << n
              << ", errno " << _err
              << " (" << utils::strerror(_err) << ")";
-          _INFO_(m_appsvc.log(), os.str());
+          _DEBUG_(m_appsvc.log(), os.str());
         }
 
         if (n == -1)

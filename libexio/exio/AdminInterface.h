@@ -59,6 +59,8 @@ class AdminInterface
 
     /* ----- Client-sessions management ----- */
 
+    bool session_open(SID) const;
+
     void session_info(SID, sid_desc&, bool& found) const;
 
     size_t session_count() const;

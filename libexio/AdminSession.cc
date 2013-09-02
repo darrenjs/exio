@@ -24,6 +24,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/utils.h"
+#include "exio/SamBuffer.h"
 
 #include "mutex.h"
 
@@ -221,10 +222,11 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
   if (m_io)
   {
     QueuedItem qi;
-    sam::SAMProtocol protocol;
+    sam::SAMProtocol protocol(m_appsvc);
+
     try
     {
-      qi.size = protocol.encodeMsg(msg, qi.buf(), qi.capacity());
+      qi.size = protocol.encodeMsg(msg, qi.sb());
 
       /*
       size_t sz = protocol.calc_encoded_size(msg);

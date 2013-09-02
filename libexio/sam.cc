@@ -20,10 +20,14 @@
 #include "exio/sam.h"
 #include "exio/Logger.h"
 #include "exio/utils.h"
+#include "exio/SamBuffer.h"
+#include "exio/AppSvc.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <sstream>
+#include <math.h>
+
 
 
 
@@ -143,10 +147,12 @@ qname qname::parse(const char * src)
 }
 
 //======================================================================
-
-void SAMProtocol::write_str(char* & dest,
-                            const std::string str,
-                            const char* const end)
+SAMProtocol::SAMProtocol(exio::AppSvc& appsvc)
+  : m_appsvc(appsvc)
+{
+}
+//----------------------------------------------------------------------
+void SAMProtocol::write_str(exio::SamBuffer* sb, const std::string & str)
 {
   /* WARNING: any changes to the encoding must be reflected in the
    * corresponding _calc method. */
@@ -166,15 +172,11 @@ void SAMProtocol::write_str(char* & dest,
   if (accept == len)
   {
     // no special characters - yay!
-    check_space(dest, end, len);
-    memcpy(dest, src, len);
-    dest += len;
+    sb->append(src, len);
   }
   else
   {
-    check_space(dest, end, accept);
-    memcpy(dest, src, accept);
-    dest += accept;
+    sb->append(src, accept);
     src  += accept;
 
     // now write out the region containing special chars, which has to be done
@@ -183,13 +185,10 @@ void SAMProtocol::write_str(char* & dest,
     {
       if ( SAMProtocol::isSpecialChar(*src) )
       {
-        check_space(dest, end, 1);
-        *dest = sam::ESCAPE;
-        ++dest;
+        sb->append( sam::ESCAPE );
       }
 
-      check_space(dest, end, 1);
-      *dest++ = *src++;
+      sb->append( *src++ );
     }
   }
 }
@@ -233,16 +232,13 @@ void SAMProtocol::write_str_calc(const std::string str, size_t & n)
 }
 
 //----------------------------------------------------------------------
-void SAMProtocol::write_noescape(char* & dest,
-                                 const char* src, size_t srclen,
-                                 const char* end)
+void SAMProtocol::write_noescape(exio::SamBuffer* sb,
+                                 const char* src, size_t srclen)
 {
   /* WARNING: any changes to the encoding must be reflected in the
    * corresponding _calc method. */
 
-  check_space(dest, end, srclen);
-  memcpy(dest, src, srclen);
-  dest += srclen;
+  sb->append(src, srclen);
 }
 
 //----------------------------------------------------------------------
@@ -253,15 +249,12 @@ void SAMProtocol::write_noescape_calc(const char* src, size_t srclen,
 }
 
 //----------------------------------------------------------------------
-void SAMProtocol::write_noescape(char* & dest,
-                                 char c,
-                                 const char* end)
+void SAMProtocol::write_noescape(exio::SamBuffer* sb, char c)
 {
   /* WARNING: any changes to the encoding must be reflected in the
    * corresponding _calc method. */
 
-  check_space(dest, end, 1);
-  *dest++ = c;
+  sb->append( c );
 }
 
 //----------------------------------------------------------------------
@@ -269,46 +262,62 @@ void SAMProtocol::write_noescape_calc(char c, size_t& n)
 {
   n++;
 }
-
 //----------------------------------------------------------------------
 size_t SAMProtocol::encodeMsg(const txMessage& msg,
-                            char* const dest,
-                            size_t len)
+                              exio::SamBuffer* sb)
 {
   /* WARNING: any changes to the encoding must be reflected in the
    * corresponding _calc method. */
 
-  char lenbuf[6] = {'0','0','0','0','0','\0'}; // strlen=5!
+  // start encoding from the message type
+  SAMProtocol::write_noescape(sb, META_DELIM);
+  SAMProtocol::write_noescape(sb, msg.type().c_str(), msg.type().length());
+  SAMProtocol::write_noescape(sb, META_DELIM);
 
-  char * p = dest;
-  const char* const end = dest + len;   // +1 past last valid memory
+  encode_contents(sb, &( msg.root() ));
 
-  SAMProtocol::write_noescape(p, MSG_START, end );
-  SAMProtocol::write_noescape(p, sam::SAM0100, 7, end );
-  SAMProtocol::write_noescape(p, META_DELIM, end );
+  SAMProtocol::write_noescape(sb, MSG_END);
+  SAMProtocol::write_noescape(sb, MSG_DELIM);
 
-  char* lenpos = p; // remember where we have to write length
-  SAMProtocol::write_noescape(p, lenbuf, sizeof(lenbuf)-1, end); // write later
+//  *p = '\0';
 
-  SAMProtocol::write_noescape(p, META_DELIM, end );
-  SAMProtocol::write_noescape(p, msg.type().c_str(), msg.type().length(), end );
-  SAMProtocol::write_noescape(p, META_DELIM, end );
+  // write the remaining part of the Sam header
+  sb->encode_header();
 
-  encode_contents( &( msg.root() ), p, end);
-
-  SAMProtocol::write_noescape(p, MSG_END, end );
-  SAMProtocol::write_noescape(p, MSG_DELIM , end );
-
-  *p = '\0';
-
-  size_t const bytes = (p - dest);
-  if (bytes > MAX_MSG_LEN) throw OverFlow(OverFlow::eExceedsSamLimit);
-
-  // write the length
-  snprintf(lenbuf, sizeof(lenbuf), "%05zu", bytes);
-  memcpy(lenpos, lenbuf, sizeof(lenbuf)-1);
-
+  size_t bytes = sb->msg_size();
   return bytes;
+
+
+//--
+
+ //  char lenbuf[6] = {'0','0','0','0','0','\0'}; // strlen=5!
+
+//   SAMProtocol::write_noescape(sb, MSG_START);
+//   SAMProtocol::write_noescape(sb, sam::SAM0100, 7);
+//   SAMProtocol::write_noescape(sb, META_DELIM);
+
+//   char* lenpos = sb.pos(); // remember where we have to write length
+//   SAMProtocol::write_noescape(sb, lenbuf, sizeof(lenbuf)-1); // write later
+
+//   SAMProtocol::write_noescape(sb, META_DELIM);
+//   SAMProtocol::write_noescape(sb, msg.type().c_str(), msg.type().length());
+//   SAMProtocol::write_noescape(sb, META_DELIM);
+
+//   encode_contents(sb, &( msg.root() ));
+
+//   SAMProtocol::write_noescape(sb, MSG_END);
+//   SAMProtocol::write_noescape(sb, MSG_DELIM);
+
+// //  *p = '\0';
+
+//   size_t const bytes = sb.bytes();
+//   if (bytes > MAX_MSG_LEN) throw OverFlow(OverFlow::eExceedsSamLimit);
+
+//   // write the length
+//   snprintf(lenbuf, sizeof(lenbuf), "%05zu", bytes);
+//   memcpy(lenpos, lenbuf, sizeof(lenbuf)-1);
+
+//   return bytes;
 }
 
 //----------------------------------------------------------------------
@@ -360,34 +369,31 @@ bool SAMProtocol::isSpecialChar(char c)
 }
 
 //----------------------------------------------------------------------
-void SAMProtocol::encode_contents(const txContainer* c,
-                                  char* & p,
-                                  const char* const end)
+void SAMProtocol::encode_contents(exio::SamBuffer* sb, const txContainer* c)
 {
   /* WARNING: any changes to the encoding must be reflected in the
    * corresponding _calc method. */
 
-  SAMProtocol::write_noescape(p, SEQ_START, end );
+  SAMProtocol::write_noescape(sb, SEQ_START);
   for (ItemList::const_iterator iter = c -> items().begin();
        iter != c -> items().end(); ++iter)
   {
-    SAMProtocol::write_noescape(p,
+    SAMProtocol::write_noescape(sb,
                                 (*iter)->name().c_str(),
-                                (*iter)->name().length(),
-                                end);
-    SAMProtocol::write_noescape(p, VALUE_DELIM, end );
+                                (*iter)->name().length());
+    SAMProtocol::write_noescape(sb, VALUE_DELIM);
     if ( const txContainer* child = (*iter)->asContainer() )
     {
-      encode_contents(child, p, end);
+      encode_contents(sb, child);
     }
     else if ( const txField* field = (*iter)->asField() )
     {
-      SAMProtocol::write_str(p, field->value(), end );
+      SAMProtocol::write_str(sb, field->value());
     }
-    SAMProtocol::write_noescape(p, FIELD_DELIM, end );
+    SAMProtocol::write_noescape(sb, FIELD_DELIM);
   }
 
-  SAMProtocol::write_noescape(p, SEQ_END, end );
+  SAMProtocol::write_noescape(sb, SEQ_END);
 }
 
 //----------------------------------------------------------------------
@@ -418,9 +424,14 @@ void SAMProtocol::encode_contents_calc(const txContainer* c, size_t& n)
 
 //----------------------------------------------------------------------
 size_t SAMProtocol::decodeMsg(txMessage& msg,
+                              int& msg_count,
                               const char* start,
                               const char* end)
 {
+  // Define max message len as approx 2G 2147483647.
+  static double max_msglen = 2147483647;
+  msg_count = 0;
+
   size_t consumed = 0;
   m_hist.clear();
 
@@ -428,54 +439,80 @@ size_t SAMProtocol::decodeMsg(txMessage& msg,
   {
     size_t bytesavail = end - start;
 
-    /* Check we have enough bytes for the message length section. */
-    if (bytesavail < head_len() ) break;
+    /* Check we have enough bytes for the message length section. Note that
+     * here we don't know how many bytes are used for the msg length. So we
+     * only detect the SAM type. */
+    size_t const head_len = 1 + 7 + 1 ; //   {SAM0100:
+    if (bytesavail < head_len ) break;
 
-    /* verify header
+    if ((*start != MSG_START) or (start[8] != META_DELIM))
+      throw std::runtime_error("bad SAM header");
 
-       Example raw headers:
+    bool sam_ver_supported = false;
+    if ( memcmp(start+1,SAM0100,7) == 0)
+    {
+      sam_ver_supported = true;
+    }
+    else if ( memcmp(start+1,SAM0101,7) == 0 )
+    {
+      sam_ver_supported = true;
+    }
+
+    /* Example SAM headers
+       ~~~~~~~~~~~~~~~~~~~
+
        {SAM0100:00065:request:[head=[command=,],body=[args_COUNT=0,],]}
        {SAM0100:111:x:}
+       {SAM0101:2147483647:x:}
        01234567890123
     */
-    if ( (*start != MSG_START) or
-         (memcmp(start+1, SAM_MAJOR_VER, 5)) or
-         (!isdigit(start[6])) or
-         (!isdigit(start[7])) or
-         (start[8] != META_DELIM) or
-         (!isdigit(start[9]))
-      )
-    {
-      throw std::runtime_error("bad SAM header");
-    }
 
-    /* Decode the message length */
-    const char* p = start + 9;
-    size_t msglen = 0;
+
+    /* Decode the message length, without making any assumption about how many
+     * bytes are used for the msglen section. */
+
+    const char* p = start + head_len;
+    double msglen = 0;
     while (p < end and isdigit(*p) and *p != sam::META_DELIM)
     {
-      msglen = (msglen * 10) + (*p - '0');  // TODO: bitand!
+      msglen = (msglen * 10) + (*p bitand 0x0F);
       p++;
+
+      // protect our application by assuming a max message size
+      if (msglen > max_msglen)
+      {
+        throw std::runtime_error("SAM message exceeds maximum size");
+      }
     }
 
-    if (bytesavail < msglen) break;  // not enough data
+    if (*p != sam::META_DELIM) break; // not enough data for header
+    if (bytesavail < msglen)   break; // not enough data for body
 
-    p++;  // skip META_DELIM
-
-    /* ----- message name ----- */
-    std::ostringstream os;
-    while (p < end and *p != sam::META_DELIM)
+    if (sam_ver_supported)
     {
-      if (*p == sam::ESCAPE) p++;
-      if (p < end) os << *p;
-      p++;
+      p++;  // skip META_DELIM
+
+      /* ----- message name ----- */
+      std::ostringstream os;
+      while (p < end and *p != sam::META_DELIM)
+      {
+        if (*p == sam::ESCAPE) p++;
+        if (p < end) os << *p;
+        p++;
+      }
+      p++;  // skip META_DELIM
+
+      msg.reset();
+      msg.type(os.str());
+
+      decode(&(msg.root()), p, p+(size_t)msglen);
+      msg_count++;
     }
-    p++;  // skip META_DELIM
-
-    msg.reset();
-    msg.type(os.str());
-
-    decode(&(msg.root()), p, p+msglen);
+    else
+    {
+      std::string samheader(start+1, 7);
+      _WARN_(m_appsvc.log(), "Unsupported SAM format, \"" << samheader << '"');
+    }
 
     consumed += msglen;
     break;  // at the moment we only decode one message at a time

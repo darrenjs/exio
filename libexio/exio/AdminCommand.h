@@ -31,6 +31,7 @@
 
 namespace exio
 {
+  class AdminInterface;
 
   /* Helper functions for adding content to messages */
   void set_pending(sam::txMessage&, bool);
@@ -107,6 +108,8 @@ class AdminRequest
 
     sam::txMessage msg;
     SID id;
+    AdminInterface * intf;
+
   private:
     std::vector< std::string > m_args;
   public:
@@ -116,7 +119,7 @@ class AdminRequest
 
   public:
     AdminRequest();
-    AdminRequest(const sam::txMessage& __req, SID __id);
+    AdminRequest(const sam::txMessage& __req, SID __id, AdminInterface * __intf);
     AdminRequest(const AdminRequest&);
     AdminRequest& operator=(const AdminRequest&);
 

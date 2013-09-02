@@ -21,6 +21,7 @@
 #define EXIO_ADMINIO_H
 
 #include "exio/sam.h"
+#include "exio/SamBuffer.h"
 
 #include "thread.h"
 
@@ -43,26 +44,18 @@ struct QueuedItem
       eThreadKill     = 0x02
 
     };
-   unsigned int flags;
+    unsigned int flags;
 
-    size_t capacity() const { return sam::MAX_MSG_LEN; }
+    const char* buf() const;
 
-    char*       buf()       { return m_buf; }
-    const char* buf() const { return m_buf; }
+    QueuedItem();
 
-    QueuedItem()
-      :  size(0),
-         flags(0)
-    {}
+    void release();
 
-    void release()  // better to just use the constructor?
-    {
-      size  = 0;
-      flags = 0;
-    }
+    exio::SamBuffer * sb() { return &m_sb; }
 
   private:
-    char   m_buf[sam::MAX_MSG_LEN];  // TODO: better to use dynamic memory
+    exio:: DynamicSamBuffer m_sb;
 };
 
 

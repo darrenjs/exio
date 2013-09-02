@@ -24,13 +24,23 @@
 namespace exio {
 
 
+//----------------------------------------------------------------------
 AppSvc::AppSvc(Config config,
                LogService * logsvc)
   : m_config(config),
     m_logsvc(logsvc)
 {
 }
-
+//----------------------------------------------------------------------
+ConsoleLogger::ConsoleLogger(StreamType stream,
+                             int __level,
+                             bool incsource)
+  : m_stream(stream),
+    m_incsource(incsource),
+    m_level(__level)
+{
+}
+//----------------------------------------------------------------------
 void ConsoleLogger::debug(const std::string&  s)
 {
   if (m_stream==eStdout)
@@ -38,6 +48,7 @@ void ConsoleLogger::debug(const std::string&  s)
   else
     std::cerr << "debug: " << s << "\n";
 }
+//----------------------------------------------------------------------
 void ConsoleLogger::info(const std::string&  s)
 {
   if (m_stream==eStdout)
@@ -45,6 +56,7 @@ void ConsoleLogger::info(const std::string&  s)
   else
     std::cerr << "info: " << s << "\n";
 }
+//----------------------------------------------------------------------
 void ConsoleLogger::error(const std::string& s)
 {
   if (m_stream==eStdout)
@@ -52,6 +64,7 @@ void ConsoleLogger::error(const std::string& s)
   else
     std::cerr << "error: " << s << "\n";
 }
+//----------------------------------------------------------------------
 void ConsoleLogger::warn(const std::string&  s)
 {
   if (m_stream==eStdout)

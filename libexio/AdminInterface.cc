@@ -177,6 +177,11 @@ void AdminInterface::session_info(SID sid, sid_desc& sd, bool& sf) const
   m_impl->session_info(sid, sd, sf);
 }
 //----------------------------------------------------------------------
+bool AdminInterface::session_open(SID s) const
+{
+  return m_impl->session_open(s);
+}
+//----------------------------------------------------------------------
 void AdminInterface::monitor_snapshot(const std::string& tablename)
 {
   m_impl->monitor_snapshot(tablename);

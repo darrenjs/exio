@@ -100,7 +100,7 @@ libexio_la_DEPENDENCIES = ../libcpp11/libcpp11.la
 am_libexio_la_OBJECTS = AdminCommand.lo AdminInterface.lo \
 	AdminServerSocket.lo AdminSession.lo sam.lo utils.lo \
 	AdminIO.lo TableSerialiser.lo TableEvents.lo Table.lo \
-	Monitor.lo AppSvc.lo AdminInterfaceImpl.lo
+	Monitor.lo AppSvc.lo AdminInterfaceImpl.lo SamBuffer.lo
 libexio_la_OBJECTS = $(am_libexio_la_OBJECTS)
 libexio_la_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
@@ -275,7 +275,7 @@ nobase_include_HEADERS = exio/AdminInterface.h exio/sam.h exio/AdminCommand.h ex
 # List the sources for an individual library
 libexio_la_SOURCES = AdminCommand.cc AdminInterface.cc AdminServerSocket.cc		\
 AdminSession.cc sam.cc utils.cc AdminIO.cc TableSerialiser.cc TableEvents.cc	\
-Table.cc Monitor.cc AppSvc.cc AdminInterfaceImpl.cc
+Table.cc Monitor.cc AppSvc.cc AdminInterfaceImpl.cc SamBuffer.cc
 
 
 # Include compile and link flags for an individual library.
@@ -383,6 +383,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/AdminSession.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/AppSvc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Monitor.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/SamBuffer.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/Table.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/TableEvents.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/TableSerialiser.Plo@am__quote@

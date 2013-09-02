@@ -27,7 +27,7 @@
 
 #include <string.h>
 
-#define MAX_SESSIONS 1000
+#define MAX_SESSIONS 2000
 #define SESSION_REG_SIZE (MAX_SESSIONS+1)
 
 namespace exio {
@@ -39,7 +39,6 @@ class AdminInterfaceObserver;
 struct SessionReg
 {
     AdminSession* ptr;
-
 
     bool used() const { return ptr != NULL; }
     static void reset(SessionReg* reg)
@@ -73,7 +72,12 @@ class AdminInterfaceImpl : public AdminSession::Listener
     const std::string& serviceid() const { return m_svcid; }
 
     /* ----- Session management ----- */
+
+    // TODO: these cannot be properly used yet, because session-closure
+    // detection is not really working.
     bool session_exists(const SID& id) const;
+    bool session_open(const SID& id) const;
+
     void session_list(std::list< SID > &) const;
 
     void session_info(SID, sid_desc&, bool& found) const;
@@ -187,11 +191,14 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
     mutable struct
     {
+        // TODO: instead of array, prefer a map of active sessions, because
+        // often we need to iterate over all open sessions.
+
         unsigned long createdCount;
 //        std::map< SID, AdminSession* > items;
         cpp11::mutex lock;
 
-        /* valid indexed are: 1 to MAX_SESSIONS */
+        /* valid indexes are: 1 to MAX_SESSIONS */
         SessionReg reg[SESSION_REG_SIZE];
         size_t next;
 
@@ -216,6 +223,8 @@ class AdminInterfaceImpl : public AdminSession::Listener
     time_t m_start_time;
 
     mutable cpp11::mutex m_create_session_lock;
+
+    AdminInterface * m_ai;
 };
 
 } // namespace exio

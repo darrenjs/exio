@@ -65,31 +65,27 @@ class ConsoleLogger : public LogService
                  eWarn,
                  eError,
                  eNone = 255};
-    int level;
 
     ConsoleLogger(StreamType stream,
-                  int __level,
-                  bool incsource=false)
-      : level(__level),
-        m_stream(stream),
-        m_incsource(incsource)
-    {}
+                  int level,
+                  bool incsource=false);
 
     virtual void debug(const std::string& );
     virtual void info(const std::string&  );
     virtual void warn(const std::string&  );
     virtual void error(const std::string& );
 
-    virtual bool want_debug() { return level <= eDebug; }
-    virtual bool want_info()  { return level <= eInfo; }
-    virtual bool want_warn()  { return level <= eWarn; }
-    virtual bool want_error() { return level <= eError; }
+    virtual bool want_debug() { return m_level <= eDebug; }
+    virtual bool want_info()  { return m_level <= eInfo; }
+    virtual bool want_warn()  { return m_level <= eWarn; }
+    virtual bool want_error() { return m_level <= eError; }
 
     virtual bool inc_source() { return m_incsource; }
-  private:
 
+  private:
     StreamType m_stream;
     bool m_incsource;
+    int m_level;
 };
 
 class AppSvc
@@ -98,6 +94,8 @@ class AppSvc
     AppSvc(Config, LogService *);
 
     const Config& conf() const  { return m_config; }
+
+    /* Can return null */
     LogService*    log()        { return m_logsvc; }
 
   private:

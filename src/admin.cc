@@ -350,16 +350,12 @@ int AdminListener::wait_for_session_closure()
 }
 
 //----------------------------------------------------------------------
-//----------------------------------------------------------------------
-
-
-
-
 void die(const char* e)
 {
   std::cout << e << "\n";
   exit( 1 );
 }
+//----------------------------------------------------------------------
 
 
 // TODO: EASY: replace references to "telnet"
@@ -561,7 +557,6 @@ void version()
 }
 //----------------------------------------------------------------------
 
-//----------------------------------------------------------------------
 void process_cmd_line(int argc, char** argv)
 {
 
@@ -653,7 +648,9 @@ int main(const int argc, char** argv)
     if (program_options.verbose > 1 ) loglevel = exio::ConsoleLogger::eInfo;
     if (program_options.verbose > 2 ) loglevel = exio::ConsoleLogger::eAll;
 
-    exio::ConsoleLogger logger(exio::ConsoleLogger::eStderr, loglevel);
+    exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
+                               loglevel,
+                               program_options.verbose>3);
 
     exio::ConsoleLogger* logptr = &logger;
 
@@ -756,7 +753,10 @@ int main(const int argc, char** argv)
 
       add_arguments(body, program_options.cmdargs);
 
-      adminsession.enqueueToSend( msg );
+      if (adminsession.enqueueToSend( msg ) )
+      {
+        exit(1); // exit, to prevent other threads for detaining us
+      }
     }
 
 
@@ -765,7 +765,7 @@ int main(const int argc, char** argv)
   catch (const std::exception& e)
   {
     std::cout << e.what() << "\n";
-    return 1;
+    exit(1);  // exit, to prevent other threads for detaining us
   }
 
 }

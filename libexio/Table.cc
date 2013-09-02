@@ -662,7 +662,7 @@ void DataTable::_nolock_send_snapshopt(const SID& session)
 
   Iter next = m_rows.begin();
 
-  sam::SAMProtocol protocol;
+  sam::SAMProtocol protocol(*m_appsvc);
 
   while (next != m_rows.end())
   {

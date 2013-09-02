@@ -51,7 +51,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
     m_svcid(ai->appsvc().conf().serviceid),
     m_serverSocket(this),
     m_monitor(this),
-    m_start_time( ::time(NULL) )
+    m_start_time( ::time(NULL) ),
+    m_ai(ai)
 {
   m_sessions.createdCount = 0;
   m_sessions.next = 1;
@@ -352,8 +353,20 @@ bool AdminInterfaceImpl::session_exists(const SID& id) const
   // sessions while we searching.
   cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  size_t index = id.unique_id();
-  return m_sessions.reg[ index ].used();
+  size_t i = id.unique_id();
+  return m_sessions.reg[ i ].used();
+}
+
+//----------------------------------------------------------------------
+bool AdminInterfaceImpl::session_open(const SID& id) const
+{
+  // Grab the lock, so that other threads cannot update the collection of
+  // sessions while we searching.
+  cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+  size_t i = id.unique_id();
+  return (m_sessions.reg[i].used() and
+          m_sessions.reg[i].ptr->is_open());
 
 //  return m_sessions.items.find( id ) != m_sessions.items.end();
 }
@@ -536,7 +549,7 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
     */
 
 
-    AdminRequest req( reqmsg,  session.id() );
+    AdminRequest req( reqmsg,  session.id(),  m_ai);
 
     {
       std::ostringstream os;
@@ -577,7 +590,15 @@ void AdminInterfaceImpl::handle_admin_request(const sam::txMessage& reqmsg,
   if (resp.send)
   {
     resp.msg.root().put_field(id::QN_msgtype, id::msg_response);
-    session.enqueueToSend( resp.msg );
+    if( session.enqueueToSend( resp.msg ) )
+    {
+      /* we failed to encode/send ... might have been an internal error, so,
+         lets try to send a stock error message */
+      exio::AdminResponse  err_resp = AdminResponse::error(reqseqno,
+                                                           id::err_unknown,
+                                                           "enqueue failed");
+      session.enqueueToSend(err_resp.msg);
+    }
   }
 
   // Optionally close the session if there is no pending replies and if the

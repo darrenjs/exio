@@ -38,7 +38,7 @@ nobase_include_HEADERS = exio/AdminInterface.h exio/sam.h exio/AdminCommand.h ex
 # List the sources for an individual library
 libexio_la_SOURCES = AdminCommand.cc AdminInterface.cc AdminServerSocket.cc		\
 AdminSession.cc sam.cc utils.cc AdminIO.cc TableSerialiser.cc TableEvents.cc	\
-Table.cc Monitor.cc AppSvc.cc AdminInterfaceImpl.cc
+Table.cc Monitor.cc AppSvc.cc AdminInterfaceImpl.cc SamBuffer.cc
 
 # Include compile and link flags for an individual library.
 #

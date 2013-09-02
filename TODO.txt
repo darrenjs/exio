@@ -103,6 +103,82 @@ SOCKET NOTES  (AdminIO)
   - object deleted, but with call to request stop
 
 
+----------------------------------------------------------------------
+TIDY-UP tasks
+-------------
+
+* should use a map for list of open sessions, because problem with a fixed
+  array, is that, while theoretically faster, really only works for Xi style
+  connections, ie, a small number of clients that remain connected all day.
+
+* the error codes need to be moved to the AdminCommand.h file
+
+* session-ID : currenty is just a unique integer.  However, what happens if it
+  wraps around?  Is there a danger?  Well, risk is that we have aliasing, ie,
+  some long running code says give me session 100, but, 100 is no longer the
+  same session; there has been a disconnect & reconnect in that time.  Only
+  way to help prevent this problem is to have a timestamp in the ID also.
+  Should not be too hard to add.
+
+----------------------------------------------------------------------
+Improvement: Protect exio from bad messages
+-------------------------------------------
+
+Really ought to implement a max message size. At the moment, a bad message
+like:
+
+{SAM0100:99999999999999999999  ....
+
+...would probably kill the server.  At the moment, have implemented a 2G
+maximum inbound message size.
+
+----------------------------------------------------------------------
+Improvement: Avoid memory copy for encoding messages
+----------------------------------------------------
+
+This has been a problem for ages.  In the message queue, where QueuedItem (?)
+objects are pushed, the encode messages are copied all the time, via object
+copies. This is ofcourse very bad. In stead, we should be pushing smart
+pointers on the queue, either some kind of C++ smart pointer, or, instead just
+make sure objects are cleaned up for all kinds of life-time end.
+
+----------------------------------------------------------------------
+Feature: detect closed session
+------------------------------
+
+>> see example.cc, Admin_LotsOfNumbers::invoke
+
+During a long running admin command, it would be good if the admin thread
+could check if the session is still open, ie, that the remote admin-session
+has not terminated.
+
+Currently, it is not straight forward to do this, because the thread that has
+just read from the socket (the client-handler) is the thread that is inside
+the admin-callback code.  Normally it is that thread which would detect a
+socket disconnect.
+
+One approach for testing is a session is still open is to try to send a
+heartbeat.  However, need to be careful if such a test was invoked from a
+tight loop; we don't want to send millions of hbs per second to the peer.
+
+So, perhaps the threading model needs to be changed?  E.g., instead of the
+approach of a client-handler thread, instead have a single thread which
+collects requests from all connected sockets (and the LISTEN socket), and then
+dispatches the requests to a handler, which in turn, will process the admin
+request.
+
+NOTES: make notes about the different designs for server applications
+
+- 1 dedicated thread per client
+
+- 1 process per client (forking server)
+
+- 1 thread per client request
+
+- also, consider the pros/cons for each approach, eg, low latency etc. And,
+  avoid the problem of parallel sessions being blocked because of a slow
+  admin.  And, related, is how we associate sessions to the session-object.
+  E.g., do we use an array or a map, etc.
 
 ----------------------------------------------------------------------
 ALL

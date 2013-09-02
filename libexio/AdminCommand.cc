@@ -39,6 +39,7 @@ namespace id
       case err_admin_not_found : return "admin not found";
       case err_no_table        : return "table not found";
       case err_missing_arg     : return "missing args";
+      case err_no_session      : return "no session";
       default                  : return "unknown error code";
     }
   }
@@ -257,15 +258,18 @@ void TableBuilder::add_row(const std::string& rowkey,
 //======================================================================
 
 AdminRequest::AdminRequest()
-  : head(NULL),
+  : intf(NULL),
+    head(NULL),
     body(NULL)
 {
 }
 //----------------------------------------------------------------------
 AdminRequest::AdminRequest(const sam::txMessage& __req,
-                           SID __id)
+                           SID __id,
+                           AdminInterface * __intf)
   : msg( __req ),
     id ( __id ),
+    intf( __intf ),
     head(NULL),
     body(NULL)
 {
@@ -274,6 +278,8 @@ AdminRequest::AdminRequest(const sam::txMessage& __req,
 //----------------------------------------------------------------------
 AdminRequest::AdminRequest(const AdminRequest& rhs)
   : msg(rhs.msg),
+    id(rhs.id),
+    intf(rhs.intf),
     head(NULL),
     body(NULL)
 {
@@ -283,6 +289,8 @@ AdminRequest::AdminRequest(const AdminRequest& rhs)
 AdminRequest& AdminRequest::operator=(const AdminRequest& rhs)
 {
   this->msg = rhs.msg;
+  this->id = rhs.id;
+  this->intf = rhs.intf;
   init_args_ptrs();
 
   return *this;

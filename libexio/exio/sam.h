@@ -36,9 +36,16 @@
 #define QNAMEPARTS( ... )  (std::string[]){  __VA_ARGS__ }
 
 
+namespace exio
+{
+  class AppSvc;
+  class SamBuffer;
+}
+
 namespace sam
 {
   static const char * const SAM0100 = "SAM0100";  // len 7
+  static const char * const SAM0101 = "SAM0101";  // len 7
   static const char   MSG_START     = '{' ;
   static const char   MSG_END       = '}';
   static const char   MSG_DELIM     = '\n';
@@ -52,7 +59,7 @@ namespace sam
   static const char * const SPECIAL_CHARS =  "{}\n[],=:\\";
   static const char * const SAM_MAJOR_VER = "SAM01"; // always len 5
 
-  static const size_t MAX_MSG_LEN   = 99999;
+  static const size_t MAX_MSG_LEN   = 99999;  // for SAM0100, 5 digits
 
   // TODO: remove from sam.h
   struct Converters
@@ -513,21 +520,24 @@ class SAMProtocol
 {
   public:
 
+    SAMProtocol(exio::AppSvc& appsvc);
+
+    /* Attempt to encode the message into the buffer provided. The buffer will
+     * expand as required. */
+    size_t encodeMsg(const txMessage& msg, exio::SamBuffer* sbuf);
+
     /* Attempt to encode the message into the buffer provided. If there is not
      * enought room in the buffer, or the message size exceeds the SAM
      * limit, an OverFlow exception is thrown. */
-    size_t encodeMsg(const txMessage& msg,
-                     char* const dest,
-                     size_t len);
+    // size_t encodeMsg(const txMessage& msg,
+    //                  char* const dest,
+    //                  size_t len);
 
     size_t calc_encoded_size(const txMessage& msg);
 
     /* return true if message can encode, else false */
     bool check_enc_size(const txMessage& msg,
                            size_t margin);
-
-    /* Minimum raw bytes needed to determine message length */
-    size_t head_len() const { return 14; } // {SAM0100:00000
 /*
 {SAM0100:00000xrequest:[head=[command=,],body=[args_COUNT=0,],]}#
 {SAM0100:11:x:}#
@@ -546,7 +556,7 @@ class SAMProtocol
      *
      * will throw runtime_error if there is a decoding problem
      */
-    size_t decodeMsg(txMessage& msg,
+    size_t decodeMsg(txMessage& msg, int& msg_count,
                      const char* start, const char* end);
 
     static bool isSpecialChar(char c);
@@ -555,18 +565,16 @@ class SAMProtocol
     const char* decode(txContainer* parent, const char* p, const char* end);
     void fail(const char* error);
 
-    static void write_str(char* & dest, const std::string str,
-                          const char* const end);
+    static void write_str(exio::SamBuffer*, const std::string & str);
     static void write_str_calc(const std::string str, size_t & n);
 
 
-    static void write_noescape(char* & dest,
-                               const char* src, size_t srclen,
-                               const char* end);
+    static void write_noescape(exio::SamBuffer*,
+                               const char* src, size_t srclen);
     static void write_noescape_calc(const char* src, size_t srclen, size_t& n);
 
 
-    static void write_noescape(char* & dest, char c, const char* end);
+    static void write_noescape(exio::SamBuffer*, char c);
     static void write_noescape_calc(char c, size_t& n);
 
     static void check_space(const char* beg, const char* end, size_t len)
@@ -575,9 +583,7 @@ class SAMProtocol
         throw OverFlow(OverFlow::eEncodingBufferTooSmall);
     }
 
-    void encode_contents(const txContainer* msg,
-                         char* & dest,
-                         const char* const end);
+    void encode_contents(exio::SamBuffer*, const txContainer* msg);
     void encode_contents_calc(const txContainer* msg, size_t& n);
 
 
@@ -591,6 +597,8 @@ class SAMProtocol
      * processed
      */
     bool m_usehist;
+
+    exio::AppSvc& m_appsvc;
 };
 
 inline txContainer::txContainer(const std::string& name)

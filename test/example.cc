@@ -1,5 +1,6 @@
 
 #include "exio/AdminInterface.h"
+#include "exio/MsgIDs.h"
 
 #include <iostream>
 
@@ -30,13 +31,74 @@ struct Admin_LargeReply : public exio::AdminCommand::Callback
 
       std::ostringstream os;
 
-      size_t bytes_count = len;
-      for (size_t i = 0; i < bytes_count; ++i) os << char('a' + (i%26));
+      try
+      {
+        size_t bytes_count = len;
+        for (size_t i = 0; i < bytes_count; ++i)
+        {
+          os << char('a' + (i%26));
+        }
+      }
+      catch(const std::exception& e)
+      {
+        std::cout << "OUT OF MEMORY!\n";
+        throw;
+      }
 
       std::string data = os.str();
       std::ostringstream msg;
       msg << "sending data with length " << data.size();
       logger.info(msg.str());
+
+      return exio::AdminResponse::success(req.reqseqno, data);
+    }
+};
+//----------------------------------------------------------------------
+struct Admin_LotsOfNumbers : public exio::AdminCommand::Callback
+{
+    virtual exio::AdminResponse invoke(exio::AdminRequest& req)
+    {
+      exio::AdminRequest::Args::const_iterator i;
+
+      std::string data;
+
+      size_t len = 100;
+
+      if (req.args().size())
+      {
+        len = atoi( req.args()[0].c_str() );
+      }
+
+      std::ostringstream os;
+
+      std::cout << "STARTING\n";
+      try
+      {
+        for (size_t i = 0; i < len; ++i)
+        {
+          os << i << "\n";
+
+
+          // TODO: use this code below for the session-check-feature
+          // if (not req.intf->session_open(req.id))
+          // {
+          //   logger.error("aborting admin, because sessions closed");
+          //   return exio::AdminResponse::error(req.reqseqno, exio::id::err_no_session);
+          // }
+          // sleep(1);
+          // std::cout << "i=" << i << "\n";
+        }
+
+        std::ostringstream msg;
+        data = os.str();
+        msg << "sending data with length " << data.size();
+        logger.info(msg.str());
+      }
+      catch(std::bad_alloc& e)
+      {
+        std::cout << "OUT OF MEMORY!\n";
+        throw;
+      }
 
       return exio::AdminResponse::success(req.reqseqno, data);
     }
@@ -124,6 +186,12 @@ int main(int argc, char** argv)
                           &adminLargeReply);
   ai->add_admin(ac);
 
+  Admin_LotsOfNumbers adminLotsOfNumbers;
+  ac = exio::AdminCommand("lots_of_numbers",
+                          "send a large reply",
+                          "Generate a large message to test the exio layer",
+                          &adminLotsOfNumbers);
+  ai->add_admin(ac);
 
   // main loop
   ai->start();
