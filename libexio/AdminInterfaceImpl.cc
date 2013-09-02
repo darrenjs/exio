@@ -107,7 +107,7 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           adminattrs) );
 
   admin_add( AdminCommand("diags",
-                          "dump exio diagnostics", "",
+                          "dump exio diagnostics", "obtain internal state of the libexio library used the application",
                           &AdminInterfaceImpl::admincmd_diags, this,
                           adminattrs) );
 
@@ -826,8 +826,18 @@ AdminResponse AdminInterfaceImpl::admincmd_help(
     std::map<std::string,AdminCommand>::iterator i = m_admins.items.find( request.args()[0] );
     if (i != m_admins.items.end())
     {
-      return AdminResponse::success(request.reqseqno,
-                                    i->second.longhelp());
+      std::ostringstream os;
+      os << i->second.name();
+
+      if (i->second.shorthelp().empty()==false)
+        os << " - " << i->second.shorthelp();
+
+      if (i->second.longhelp().empty()==false)
+      {
+        os << "\n\n" << i->second.longhelp();
+      }
+
+      return AdminResponse::success(request.reqseqno,os.str());
     }
     else
     {
