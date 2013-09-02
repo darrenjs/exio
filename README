@@ -2,6 +2,22 @@ HISTORY
 =======
 
 
+
+Notes on making a release
+-------------------------
+
+* Update these release notes
+
+* Change the version number in the configure.ac script, and in the libexio makefile.
+
+* Make a branch:
+
+NEWVER=1.4.3
+SRC=file:///home/darrens/system/subversion/exio/exio
+DEST=file:///home/darrens/system/subversion/exio/branches/${NEWVER}
+svn copy --parents  ${SRC} ${DEST}
+
+
 IN PROGRESS
 -----------
 
