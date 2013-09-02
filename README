@@ -5,6 +5,11 @@ HISTORY
 IN PROGRESS
 -----------
 
+
+
+1.4.3 - 02/09/13 - r153
+-----
+
 * fixed new-column bug, where a row was updated multiple times when a new
   column was added (and added example program to test) r140
 
@@ -26,6 +31,10 @@ IN PROGRESS
 * --version option to admin. r144
 
 * added test function to the example server for sending large messages. r146
+
+* SAM0101 protocol change, which supports messages longer than 99999 (which is
+  the limitation of SAM0100). Added expandable encoding and socket buffer
+  classes to support this.
 
 1.4.2 [r136]
 -----
