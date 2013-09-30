@@ -805,12 +805,10 @@ txContainer & txContainer::operator=(const txContainer & rhs)
   // have an impl class, which is just a struct that contains all of the raw
   // data.
 
+
+  this->clear();
+
   txItem::operator=(rhs);
-  // TODO: clear our lists  -- check: does this delete?
-  m_items.clear();
-//  m_item_map.clear();
-  m_field_map.clear();
-  m_child_map.clear();
 
   // TODO: copy
   for (ItemList::const_iterator iter = rhs.m_items.begin();
