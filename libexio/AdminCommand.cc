@@ -24,9 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 
-
 namespace exio {
-
 
 namespace id
 {
@@ -377,9 +375,8 @@ AdminResponse& AdminResponse::operator=(const AdminResponse& src)
 {
   this->send = src.send;
   this->msg = src.msg;
-  this->m_head = &msg.root().put_child(id::head);
-  this->m_body = &msg.root().put_child(id::body);
-
+  this->m_head = &(this->msg.root().put_child(id::head));
+  this->m_body = &(this->msg.root().put_child(id::body));
   return *this;
 }
 //----------------------------------------------------------------------
