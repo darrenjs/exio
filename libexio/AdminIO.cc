@@ -221,8 +221,8 @@ AdminIO::AdminIO(AppSvc& appsvc,int fd, AdminIOListener * l)
      m_bytesin(0),
      m_last_write(0),
      m_log_io_events(false),
-     m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),
-     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this))
+     m_read_thread( new cpp11::thread(&AdminIO::socket_read_TEP, this)),  // Dangerous: is object ready?
+     m_write_thread( new cpp11::thread(&AdminIO::socket_write_TEP, this)) // Dangerous: is object ready?
 {
   if (appsvc.log() and appsvc.log()->want_debug())
   {
@@ -428,11 +428,10 @@ void AdminIO::read_from_socket()
 
     while ( buf.bytesavail() )
     {
-      int msg_count = 0;
       size_t consumed = 0;
       try
       {
-        consumed = samp.decodeMsg(msg, msg_count, buf.rp(), buf.rp()+buf.bytesavail());
+        consumed = samp.decodeMsg(msg, buf.rp(), buf.bytesavail());
       }
       catch (const std::exception& e)
       {
@@ -459,7 +458,7 @@ void AdminIO::read_from_socket()
 
       if (consumed > 0)
       {
-        if (m_listener and msg_count > 0)
+        if (m_listener)
         {
           // Note: only handling 1 msg at a time
           try {

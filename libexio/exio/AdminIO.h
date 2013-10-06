@@ -159,6 +159,8 @@ class AdminIO
     pthread_t reader_pth() const { return m_lwp.reader_pthread; }
     pthread_t writer_pth() const { return m_lwp.writer_pthread; }
 
+    int fd() const { return m_fd; }
+
   private:
     AdminIO(const AdminIO&); // no copy
     AdminIO& operator=(const AdminIO&); // no assignment
