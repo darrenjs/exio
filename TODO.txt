@@ -2,6 +2,268 @@ TODO for libadmin
 =================
 
 
+01/10/13
+
+----------------------------------------------------------------------
+Tasks for productionisation in 1 week
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ /\/\/\ BUGS /\/\/\
+
+* BUG: why is admin command now showing a delay?
+
+* BUG: I think I saw the admin command coming back blank.  Have had this error
+  previously.
+
+* Memory leak?
+
+* Why does admin consume so much CPU power?  Can we profile it to find out
+  why?
+
+* complete functional gaps
+
+  -> complete IO statistics
+
+  -> complete session queue limits and auto-dropping
+
+
+* develop test scripts, for running admin repeatedly, and capturing output.
+
+* conduct long-runs, with multiple hosts etc.
+
+* code review
+
+* svn checkin
+
+* new version number  1.5
+
+----------------------------------------------------------------------
+
+05/10/13  -- possible memory leak
+
+VmPeak:  1432840 kB
+VmSize:  1299336 kB
+VmLck:         0 kB
+VmPin:         0 kB
+VmHWM:    107184 kB
+VmRSS:      3136 kB
+VmData:  1278668 kB
+VmStk:       136 kB
+VmExe:        76 kB
+VmLib:      4940 kB
+VmPTE:       180 kB
+VmSwap:       68 kB
+
+
+Why is VmData is large?
+
+Text segment & constants : program code.  read only.
+
+VmData: the initialised, BSS, and heap sections.
+        - will grow, as 'brk' and 'sbrk' are called
+
+VmHWM: peak physical memory usage
+
+VM ==> virtual memory. larger that physical memory.
+
+MMU : unit that maps from VM addresses to physical pages.
+
+VM: devided into pages (4K)
+
+paging: when a VM page is moves from storage (swap) into physical
+
+
+TEXT
+DATA
+heap
+SharedLibraries
+stack
+
+
+free: does free return memory to the system, thus making the process smaller?
+Or, is it just placed in the free-list?
+
+
+----------------------------------------------------------------------
+New exio IO system
+~~~~~~~~~~~~~~~~~~
+
+* MEDIUM: test the ability of the Reactor to be destructed.  I.e. have a test
+  server which is able to create/shutdown a second reactor.  At the moment we
+  do delete a Reactor instance in AdminInterfaceImpl, but, it has not been
+  tested.
+
+* HARD: review the container used for session-management in the
+  AdminInterfaceImpl, and how session-ids are created/reused etc.
+
+* MEDIUM: the MAX_SESSIONS in AdminInterfaceImpl should come from config.
+
+* MEDIUM: what are the differences between deque<> and list<> ?  Should review
+  this for the IO queues which are heavily used.
+
+* EASY: handle    if (nready < 0)   in Reactor.  Just need to log the
+  stderror, and sleep before continuing with a retry.
+
+* EASY: in Reactor.cc, there is some logging code which needs to be moved to
+  their own function.
+
+* MEDIUM: review the lock around the m_clients list in Reactor.cc.  Is it
+  really needed?  Originally it wasn't there, then at sometime it was added.
+  I think it is mostly used on the Reactor thread, although, it is also used
+  on in the destructor (and that might be the problem).  Also, as part of this
+  review, need to review the whole Reactor shutdown.  It think too much it
+  being done in the destructor; instread, we should just signal the Reactor
+  thread to exit, and then get it to perform the various cleanup operations
+  etc.  Also, have a think about when the Reactor should do if there are still
+  clients attached during the destruction?  Should it wait for their IO to
+  complete?  Or should it close their sockets etc? REVIEW REIVEW REVIEW!
+
+* MEDIUM: review the TODOs in Client.cc, because some of them are important,
+  and related to exception handling.
+
+* HARD: need to review the memory strategy, eg, how memory regions are
+  copied/passed throughout the inbound and outbound flows, and also during
+  message encoding and decoding.
+
+* HARD: one problem in the BufferedClient is that we only grow the memory in
+  the ReactorReadBuffer.  We never shrink it down.
+
+* EASY: in the console logger, add timestamp logging
+
+* EASY: in the logging interface, add char* file, int lineno params.
+
+* MEDIUM [LOW] : I have turned off the parsing history.  However, if there is
+  a parsing error, it would be nice to give a hint.  So, change the fail so
+  that it can be passed a pointer and length, which should be an exceprt of
+  the message string being parsed when the error was encountered.
+
+* MEDIUM: measure variable approachs to building strings, eg, stringstream,
+  string::operator+, std::string::append, vector, snprint
+
+* HARD: refactor the memory buffer classes, so they are more efficient, and,
+  try to avoid copying all the time.  Also, do we need to have a sequence
+  number? Because if we don't, then perhaps the message sending can be more
+  efficient.
+
+* CRITICAL: see TODO in decodeMsg, because there is a bug in the message
+  decoing.  But before fixing it, set up test case framework.
+
+* NEXT-TESTING: continue with all night runs.  Will have to turn off the
+  current debug logging of bad messages.
+
+* EASY: is a badmsg arrives, then log that as a warning.  Useful to add this
+  sooner rather than later, because will help in debugging.
+
+* MAYBE: the admin leak is related to stdout --- so, perhaps try again, but,
+  don't std::cout?
+
+* NEXT: why are the admin's exiting?  Add code to catch the exit, or, signal?
+  --> UPDATE: due to memory growth, they are being killed by the system.
+
+* NEXT: why is admin taking up:     VmRSS:   5781052 kB
+  --> UPDATE: think it is due to console buffering!
+
+* MEDIUM: need to try by sam decoder on bad messages.  So first, build a test
+  harness for it. Then test messages like:
+
+  {SAM0100:<LEN>:::[])   <--- ie, table name is just a colon, etc
+
+* MEDIUM: if I had xlog working, then for the admin (or ./example), I could
+  log out the size of the queues.  I suspect the input queue (because that is
+  only one the admin should have?) is getting incredible massive.
+
+* HARD-BUG: why do the admins take up so much CPU?
+
+* MEDIUM: find a way to remove the complex QNAME things.  Maybe introduction
+  functions instead? Ie, head_tablename(); as a function
+
+* MEDIUM: change the inbound buffer (inteh std::list), so that less memory is
+  copied.
+
+* BUG-FIX: need to stop using the std:list, or, at least, stop relying on
+  size() and empty()  -- instead, maintain my own count.
+
+* MEDIUM: need to profile the admin comand, to see how much memory it is
+  leaking.  So, maybe write a small script which is used to start admin, but
+  then watches its usage.
+
+* MEDIUM: have seen that sometimes the admin command exits, when all it is
+  doing is receiving a constant stream of data.  So need to add some logging
+  code to see why it is terminating.
+
+* MEDIUM: add a trigger to example server, which allows it to exit, which will
+  allow progress on the following HARD item:
+
+* HARD: work on destruction of the AdminInterface object, to see if all memory
+  is reclaimed.
+
+* MEDIUM: identify the structs which represnet simple chunks of data, and see
+  if we can create a common one.
+
+* MEDIUM: add timestamps to the console logger
+
+* MEDIUM: add option to example-server so that it can send messages.
+
+* EASY: change the logging classes, so that the __FILE__ and __LINE__ are just
+  additional parameters, instead of pushing them into the ostringstream.  Also
+  means we can remove the inc_source method.
+
+* MEDIUM: now that AdminIO is on its way out, need to provide ways to get the
+  number of bytes read/written etc, from the standard client.
+
+* MEDIUM: in Reactor class, look to improve the writing of Ctrl messages to
+  the internal pipe. I.e., handle failures.
+
+* MEDIUM: there are functions like Bind which are defined in multiple places.
+  Move then into a header?  I.e. see the copyright notice on the unp.h header,
+  because most of them are from there (and, start to remove the throwing of
+  exceptions).
+
+* EASY: refactor the Reactor so that it only relies on LogSvc class, and not
+  AppSvc.
+
+* DONE: write a new test (server) program for generating lots of data on a
+  table, so that when I perform load tests, I can test clients which connect
+  and receive lots of data.
+
+* EASY: write a test (client) program which will send high volume of data.
+
+* test the "example" program has a memory leak, which is probably found in Reactor.
+
+* MEDIUM: add method to client to allow a wait until data written. UPDATE:
+  this has been written, but now needs testing.  Need to create the situation
+  where the socket write is slowed down (maybe a sleep in the Reactor), so
+  that the wait can be tested.
+
+* HARD: move the server socket thread into the Reactor.  I.e., then we can
+  remove that thread too.  But, what about housekeeping?
+
+* DESIGN: decouple the Client from the AdminSession.  Should not be based on
+  inheritance, but instead just an interface class for callback. UPDATE:  do
+  we really need this?  What is the beneit?
+
+* Threading: need to add a recursive lock
+
+* DESIGN ISSUE: we have a problem if the TASK thread, going into a client
+  callback, causes the destruction of the client object.  Not sure how to
+  fully handle this, but two parts of the problem are th recursie lock and the
+  doupleing of the client from the adminsession.
+
+* HIGH: need to handle situation where max number of clients is reached.  This
+  will likely be an exception or return-balue form add_client. Start with
+  add_client in the reactor.
+
+* HARD: in the client, need a method to write/close/wait-for-completion
+  ... this is needed so that UA which want to ensure data is written can do
+  so.
+
+* HARD: need to test the sending / receiving of VERY LARGE messages
+
+* HARD: move the housekeeping thread into the Reactor?
+
+* HARD: build using FreeBSD
+
 Work: new approach to snapshots
 
 - raw table is converted into a txMessage type structure
