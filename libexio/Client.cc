@@ -118,6 +118,19 @@ struct RawMsg
 
 
 
+ReactorClient::ReactorClient(Reactor* r, int fd)
+  : m_reactor(r),
+    m_fd(fd),
+    m_io_open(true),
+    m_bytes_out(0),
+    m_bytes_in(0),
+    m_last_write(time(NULL)),
+    m_last_read(m_last_write)
+{}
+
+
+
+
   Client::DataFifo::DataFifo()
     : itemcount(0),
       pending(0)
@@ -416,6 +429,10 @@ void Client::handle_input()  /* REACTOR THREAD */
   }
   else if (n > 0 )
   {
+    m_bytes_in += n;
+    m_last_read = time(NULL);
+
+
     // if we have reached here, then we have successfully read new bytes from
     // the socket, and placed them into the read buffer
     chunk.size = n;
@@ -563,6 +580,8 @@ void Client::handle_output() /* REACTOR THREAD */
     if (n>0)
     {
       next->eat(n);
+      m_bytes_out += n;
+      m_last_write = time(NULL);
 
       cpp11::lock_guard<cpp11::mutex> guard( m_out_q.mutex );
       m_out_q.pending = (m_out_q.pending>(size_t)n)? (m_out_q.pending-n) : 0;

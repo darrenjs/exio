@@ -24,11 +24,7 @@ class ReactorClient
 {
   public:
 
-    ReactorClient(Reactor* r, int fd)
-      : m_reactor(r),
-        m_fd(fd),
-        m_io_open(true)
-    {}
+    ReactorClient(Reactor* r, int fd);
 
     virtual void handle_input() = 0;
     virtual void handle_output() = 0;
@@ -40,6 +36,11 @@ class ReactorClient
     Reactor* reactor() { return m_reactor; }
 
     bool    io_open() const { return m_io_open; }
+
+    size_t  bytes_out()  const { return m_bytes_out; }
+    size_t  bytes_in()   const { return m_bytes_in; }
+    time_t  last_write() const { return m_last_write; }
+    time_t  last_read()  const { return m_last_read; }
 
   protected:
     virtual ~ReactorClient(){}
@@ -53,6 +54,12 @@ class ReactorClient
     Reactor* m_reactor;
     int      m_fd;
     bool     m_io_open;
+
+  protected:
+    size_t   m_bytes_out;
+    size_t   m_bytes_in;
+    time_t   m_last_write;
+    time_t   m_last_read;
 
     friend class Reactor;
 };
