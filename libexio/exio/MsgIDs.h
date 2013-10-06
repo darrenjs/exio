@@ -75,6 +75,8 @@ namespace id  /* identifiers */
   static const std::string True   = "1";  // yes
   static const std::string False  = "0";  // no
 
+  // TODO: where is QNAME defined?  It should really be in this header.
+
   // qualified-name id for fields
   static const sam::qname QN_body_respdata  = QNAME( body, respdata );
   static const sam::qname QN_body_resptype  = QNAME( body, resptype );
