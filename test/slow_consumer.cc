@@ -23,6 +23,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
+#include "exio/Reactor.h"
 #include "config.h"
 
 #include "condition_variable.h"
@@ -524,8 +525,9 @@ int main(const int argc, char** argv)
 
     AdminListener listener(fd);
 
+    exio::Reactor reactor(appsvc.log());
     exio::AdminSession adminsession(appsvc, fd, &listener, 1);
-
+    adminsession.init(&reactor);
     // Generate a logon message
 
     // TODO: once the ximon is able to send logon messages first, then we won't

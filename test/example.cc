@@ -7,11 +7,14 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+
 
 exio::AdminInterface * ai = NULL;
 
 exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
-                           exio::ConsoleLogger::eAll,
+                           exio::ConsoleLogger::eWarn,
                            true);
 
 //----------------------------------------------------------------------
@@ -146,8 +149,66 @@ void die(const char* e)
   exit( 1 );
 }
 
+
+struct  StockPrice
+{
+    std::string name;
+    double bbp1;
+    double bap1;
+    int    bbs1;
+    int    bas1;
+
+
+    StockPrice(const char * __name,
+               double price)
+      : name(__name),
+        bbp1(price*0.9),
+        bap1(price*1.1),
+        bbs1(0),
+        bas1(0)
+    {
+
+    }
+
+    void update()
+    {
+      double r = double(rand()) / RAND_MAX;
+      if (r > 0.6)
+      {
+        bbp1 += 1;
+        bap1 += 1;
+        bbs1 = 1 + (100*(double(rand()) / RAND_MAX));
+        bas1 = 1 + (100*(double(rand()) / RAND_MAX));
+      }
+      else if (r > 0.3)
+      {
+        bbp1 -= 1;
+        bap1 -= 1;
+        bbs1 = 1 + (100*(double(rand()) / RAND_MAX));
+        bas1 = 1 + (100*(double(rand()) / RAND_MAX));
+      }
+      else
+      {
+      }
+
+    }
+
+    void table(std::map<std::string, std::string>& dest )
+    {
+      char buf[100];
+
+      sprintf(buf, "%f", bbp1); dest["bbp1"] = buf;
+      sprintf(buf, "%f", bap1); dest["bap1"] = buf;
+      sprintf(buf, "%d", bbs1); dest["bbs1"] = buf;
+      sprintf(buf, "%d", bas1); dest["bas1"] = buf;
+      dest["ric"] = name;
+    }
+
+
+};
+
 //----------------------------------------------------------------------
-int main(int argc, char** argv)
+int __main(int argc, char** argv)
 {
 
   int port = -1;
@@ -195,9 +256,49 @@ int main(int argc, char** argv)
 
   // main loop
   ai->start();
+
+
+  std::vector<StockPrice> names;
+  names.push_back(StockPrice("VOD.L", 200.0));
+  names.push_back(StockPrice("BT.L", 120.0));
+  names.push_back(StockPrice("HSBC.L", 50.0));
+  names.push_back(StockPrice("RIO.L", 150.0));
+  names.push_back(StockPrice("BA.L", 450.0));
+
+
   while(true)
   {
-    sleep(60);
+    for (std::vector<StockPrice>::iterator i = names.begin(); i != names.end(); ++i)
+    {
+      std::map<std::string, std::string> up;
+      i->update();
+      i->table(up);
+      ai->monitor_update("lse", i->name, up);
+    }
+
+
+    usleep(1000000);
+  }
+  while(true) { sleep(10); }
+
+  return 0;
+}
+
+//----------------------------------------------------------------------
+int main(int argc, char** argv)
+{
+  try
+  {
+    return __main(argc, argv);
+  }
+  catch (const std::exception & e)
+  {
+    std::cout << "exception caught in main: " << e.what() << "\n";
+  }
+  catch (...)
+  {
+    std::cout << "exception caught in main: unknown";
   }
 
+  return 1;
 }

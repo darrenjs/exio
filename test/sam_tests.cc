@@ -2,8 +2,13 @@
 
 
 #include "exio/sam.h"
+#include "exio/SamBuffer.h"
+
+#include "exio/AppSvc.h"
 
 #include <iostream>
+
+#include <string.h>
 
 
 void banner()
@@ -21,6 +26,7 @@ void dump(const sam::txContainer& c, const char* prefix = NULL)
   std::cout << "\n";
 }
 
+
 void test_add_field_and_child_same_name()
 {
   banner();
@@ -32,6 +38,7 @@ void test_add_field_and_child_same_name()
   dump(meta, "META: ");
 }
 
+//----------------------------------------------------------------------
 void test1()
 {
   banner();
@@ -54,6 +61,7 @@ void test1()
   dump(meta, "AFTER2: ");
 
 }
+//----------------------------------------------------------------------
 void test0()
 {
   banner();
@@ -108,12 +116,74 @@ void test0()
   meta.merge( delta );
   dump(meta, "AFTER: ");
 }
+//----------------------------------------------------------------------
+
+
+void test2()
+{
+  //char * orig="{SAM0100:45:logon:[head=[serviceid=test,],]}\n";
+  const char * orig="{SAM0100:45:logon#[head=[serviceid=test,],]}\n{SAM0100:45:LOGON:[HEAD=[SERVICEID=TEST,],]}\n";
+
+  exio::AppSvc appsvc;
+
+  sam::SAMProtocol samp(appsvc);
+  sam::txMessage msg;
+
+  samp.decodeMsg(msg, orig, strlen(orig));
+
+
+  exio::DynamicSamBuffer sbuf;
+  samp.encodeMsg(msg, &sbuf);
+
+  if (strncmp(orig, sbuf.msg_start(), std::min(strlen(orig), sbuf.msg_size())) != 0)
+  {
+    std::cout << "differ!\n";
+
+  }
+  dump(msg.root(), "msg: ");
+
+}
+
+void test3()
+{
+  //char * orig="{SAM0100:45:logon:[head=[serviceid=test,],]}\n";
+  const char * orig="{SAM0100:452839fgdfgdf";
+
+  exio::AppSvc appsvc;
+
+  sam::SAMProtocol samp(appsvc);
+  sam::txMessage msg;
+
+  samp.decodeMsg(msg, orig, strlen(orig));
+
+
+  exio::DynamicSamBuffer sbuf;
+  samp.encodeMsg(msg, &sbuf);
+
+  if (strncmp(orig, sbuf.msg_start(), std::min(strlen(orig), sbuf.msg_size())) != 0)
+  {
+    std::cout << "differ!\n";
+
+  }
+  dump(msg.root(), "msg: ");
+
+}
 
 
 int main(int argc, char** argv)
 {
-  test0();
-  test_add_field_and_child_same_name();
-  test1();
+  try
+  {
+    test0();
+    test_add_field_and_child_same_name();
+    test1();
+    //test2();
+    test3();
+  }
+  catch (const std::exception& e)
+  {
+    std::cout << "exception: "<< e.what() << "\n";
+    return 1;
+  }
   return 0;
 }
