@@ -27,7 +27,7 @@
 
 #include <string.h>
 
-#define MAX_SESSIONS 2000
+#define MAX_SESSIONS 2000   // TODO: should be configurable
 #define SESSION_REG_SIZE (MAX_SESSIONS+1)
 
 namespace exio {
@@ -35,6 +35,7 @@ namespace exio {
 class Config;
 class LogService;
 class AdminInterfaceObserver;
+class Reactor;
 
 struct SessionReg
 {
@@ -64,6 +65,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
   public:
 
     AdminInterfaceImpl(AdminInterface *);
+    ~AdminInterfaceImpl();
 
     // TODO: why no destructor?
 
@@ -160,6 +162,11 @@ class AdminInterfaceImpl : public AdminSession::Listener
     void start();
     void housekeeping();
 
+
+  protected:
+
+    AdminSession* get_session(SID);
+
   private:
 
     AdminResponse admincmd_list_tables(AdminRequest& r);
@@ -181,6 +188,8 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
     static void helper_session_descr(std::ostream&, AdminSession&,
                                      const std::string&);
+
+
 
   private:
     AppSvc&          m_appsvc;
@@ -225,6 +234,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
     mutable cpp11::mutex m_create_session_lock;
 
     AdminInterface * m_ai;
+    Reactor * m_reactor;
 };
 
 } // namespace exio

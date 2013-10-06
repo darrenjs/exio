@@ -23,6 +23,8 @@
 #include "exio/Logger.h"
 #include "exio/MsgIDs.h"
 #include "exio/utils.h"
+#include "exio/Reactor.h"
+
 #include "config.h"
 
 #include <stdlib.h>
@@ -52,7 +54,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
     m_serverSocket(this),
     m_monitor(this),
     m_start_time( ::time(NULL) ),
-    m_ai(ai)
+    m_ai(ai),
+    m_reactor( new Reactor(ai->appsvc().log()))
 {
   m_sessions.createdCount = 0;
   m_sessions.next = 1;
@@ -73,6 +76,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
 
   std::map<std::string,std::string> adminattrs;
   adminattrs[ "hidden" ] = "false";
+
+  // TODO: to these admins ever get deleted?
 
   /* Register some admin capabilities of an admin interface */
   admin_add( AdminCommand("tables",
@@ -121,6 +126,13 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           &AdminInterfaceImpl::admincmd_del_session, this,
                           adminattrs) );
 
+}
+
+//----------------------------------------------------------------------
+
+AdminInterfaceImpl::~AdminInterfaceImpl()
+{
+  delete m_reactor;
 }
 
 //----------------------------------------------------------------------
@@ -195,7 +207,7 @@ void AdminInterfaceImpl::session_cleanup()
     AdminSession* s = *i;
     try
     {
-      if ( s->safe_to_delete() )
+      if ( s->safe_to_delete())
       {
 //        _INFO_(m_logsvc, "Deleting session " << i->second->id() );
         delete s;
@@ -760,9 +772,15 @@ void AdminInterfaceImpl::createNewSession(int fd)
     // creating a new unique ID, or, reject the connection.
 
     m_sessions.reg[ session_index ].ptr = session;
+
     // m_sessions.items[ session->id() ] = session;
+
+
     m_sessions.createdCount++;
   }
+
+  // add client to the reactor quite early, so the IO events can begin
+  session->init(m_reactor);
 
   _INFO_(m_appsvc.log(), "Connection from "
          << session->peeraddr()
@@ -781,6 +799,7 @@ void AdminInterfaceImpl::createNewSession(int fd)
 
   logon.root().put_field(id::QN_serviceid, m_appsvc.conf().serviceid);
   session->enqueueToSend( logon );
+
 }
 
 //----------------------------------------------------------------------
@@ -1390,4 +1409,26 @@ void AdminInterfaceImpl::copy_rowkeys(const std::string& tablename,
   m_monitor.copy_rowkeys(tablename, dest);
 }
 //----------------------------------------------------------------------
+
+
+AdminSession* AdminInterfaceImpl::get_session(SID id)
+{
+  AdminSession * ptr = NULL;
+
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+
+    SessionReg& sreg = m_sessions.reg[ id.unique_id() ];
+    if (sreg.used())
+    {
+      ptr =  sreg.ptr;
+    }
+  }
+
+  return ptr;
+}
+
+//----------------------------------------------------------------------
+
+
 } // namespace exio
