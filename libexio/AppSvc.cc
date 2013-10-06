@@ -21,6 +21,10 @@
 
 #include <iostream>
 
+#include <unistd.h>
+#include <sys/syscall.h>   /* For SYS_xxx definitions */
+
+
 namespace exio {
 
 
@@ -43,34 +47,38 @@ ConsoleLogger::ConsoleLogger(StreamType stream,
 //----------------------------------------------------------------------
 void ConsoleLogger::debug(const std::string&  s)
 {
-  if (m_stream==eStdout)
-    std::cout << "debug: " << s << "\n";
-  else
-    std::cerr << "debug: " << s << "\n";
+  int tid = syscall(SYS_gettid);
+  std::ostream& os = (m_stream==eStdout)? std::cout : std::cerr;
+
+  cpp11::lock_guard<cpp11::mutex> lock( m_mutex );
+  os << "[" << tid << "] " << "debug: " << s << "\n";
 }
 //----------------------------------------------------------------------
 void ConsoleLogger::info(const std::string&  s)
 {
-  if (m_stream==eStdout)
-    std::cout << "info: " << s << "\n";
-  else
-    std::cerr << "info: " << s << "\n";
+  int tid = syscall(SYS_gettid);
+  std::ostream& os = (m_stream==eStdout)? std::cout : std::cerr;
+
+  cpp11::lock_guard<cpp11::mutex> lock( m_mutex );
+  os << "[" << tid << "] " << "info: " << s << "\n";
 }
 //----------------------------------------------------------------------
 void ConsoleLogger::error(const std::string& s)
 {
-  if (m_stream==eStdout)
-    std::cout << "error: " << s << "\n";
-  else
-    std::cerr << "error: " << s << "\n";
+  int tid = syscall(SYS_gettid);
+  std::ostream& os = (m_stream==eStdout)? std::cout : std::cerr;
+
+  cpp11::lock_guard<cpp11::mutex> lock( m_mutex );
+  os << "[" << tid << "] " << "error: " << s << "\n";
 }
 //----------------------------------------------------------------------
 void ConsoleLogger::warn(const std::string&  s)
 {
-  if (m_stream==eStdout)
-    std::cout << "warn: " << s << "\n";
-  else
-    std::cerr << "warn: " << s << "\n";
+  int tid = syscall(SYS_gettid);
+  std::ostream& os = (m_stream==eStdout)? std::cout : std::cerr;
+
+  cpp11::lock_guard<cpp11::mutex> lock( m_mutex );
+  os << "[" << tid << "] " << "warn: " << s << "\n";
 }
 
 

@@ -20,6 +20,8 @@
 #ifndef EXIO_APPSVC_H
 #define EXIO_APPSVC_H
 
+#include "mutex.h"
+
 #include <string>
 
 namespace exio
@@ -86,12 +88,15 @@ class ConsoleLogger : public LogService
     StreamType m_stream;
     bool m_incsource;
     int m_level;
+    cpp11::mutex  m_mutex;
 };
 
 class AppSvc
 {
   public:
+    AppSvc() : m_logsvc(NULL){}
     AppSvc(Config, LogService *);
+
 
     const Config& conf() const  { return m_config; }
 
