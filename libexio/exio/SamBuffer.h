@@ -74,7 +74,7 @@ class SamBuffer
 class DynamicSamBuffer : public SamBuffer
 {
   public:
-    DynamicSamBuffer(size_t reserve = 4096); // medium, to mostly avoid reallocs
+    DynamicSamBuffer(size_t reserve = 512);
     ~DynamicSamBuffer();
 
     void append(const char* src, size_t srclen);
