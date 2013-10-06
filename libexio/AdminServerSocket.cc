@@ -336,7 +336,11 @@ void AdminServerSocket::accept_TEP()
     // socket poll is failing.  The sleep is at the end of the while-loop so
     // that we don't sleep at module startup; ie, as soon as this class is
     // instantiated, we are listening for incoming connections without delay.
-    usleep( 250000 );
+    //
+    // The sleep value is now chosen to be 100ms.  This should offer
+    // protection against rapid access, and, is not too noticable for normal
+    // user interaction.
+    usleep( 100000 );
   } // while
 
 
