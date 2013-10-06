@@ -23,6 +23,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
+#include "exio/Reactor.h"
 #include "config.h"
 
 #include "condition_variable.h"
@@ -199,6 +200,7 @@ void AdminListener::handle_table_response(const sam::txContainer* body)
       //   if (usedelim) std::cout << ", "; else usedelim=true;
       //   std::cout << f->second->value();
       // }
+
       std::cout << "\n";
     }
   }
@@ -225,7 +227,7 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
     std::cout << " FAIL, ";
   }
 
-  if (restext) std::cout << restext->value() << "\n"; // terminate the response summary
+  if (restext) std::cout << restext->value() << std::endl; // terminate the response summary
 
   /* process head */
   const sam::txContainer * body = msg.root().find_child("body");
@@ -250,13 +252,13 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
       const sam::txField* text = respdata->find_field(exio::id::text);
       if (text != NULL and text->value().size() )
       {
-        std::cout << text->value() << "\n";
+        std::cout << text->value() << std::endl;
       }
     }
   }
   else
   {
-    std::cout << "NO FORMAT\n";
+    std::cout << "NO FORMAT" << std::endl;
   }
   // {
   //   const sam::txContainer * data = NULL;
@@ -295,7 +297,7 @@ void AdminListener::session_msg_received(const sam::txMessage& msg,
     sam::MessageFormatter fmt(true);
     std::cout <<"MESSAGE: ";
     fmt.format( msg, std::cout );
-    std::cout << "\n";
+    std::cout << std::endl;
     std::cout.flush();
   }
 
@@ -323,12 +325,13 @@ void AdminListener::session_msg_received(const sam::txMessage& msg,
 
   /* If we are here, it looks like an unsoliticed message, which we may want
    * to display. */
+  std::ostringstream os;
   if (m_show_unsol)
   {
     sam::MessageFormatter fmt(true);
-    fmt.format( msg, std::cout );
-    std::cout << "\n";
-    std::cout.flush();
+    fmt.format( msg, os );
+    std::cout << os.str();
+    std::cout << std::endl;
   }
 }
 
@@ -352,7 +355,7 @@ int AdminListener::wait_for_session_closure()
 //----------------------------------------------------------------------
 void die(const char* e)
 {
-  std::cout << e << "\n";
+  std::cout << e  << std::endl;
   exit( 1 );
 }
 //----------------------------------------------------------------------
@@ -499,7 +502,7 @@ std::string build_user_id()
     strcpy(username, "unknown");
   username[sizeof(username)-1] = '\0';
 
-  return username;
+  return std::string(username);
 }
 
 std::string build_service_id(const char* argv_0)
@@ -547,13 +550,14 @@ void usage()
 
   std::cout << "Options:\n\n";
   std::cout << "  -d\tlog exio problems; repeat twice for info, thrice for debug\n";
-  std::cout << "  -v\tversion info\n";
+  std::cout << "  -v\tversion info";
+  std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------
 void version()
 {
-  std::cout << PACKAGE_VERSION "\n";
+  std::cout << PACKAGE_VERSION << std::endl;
 }
 //----------------------------------------------------------------------
 
@@ -631,142 +635,163 @@ void process_cmd_line(int argc, char** argv)
 }
 
 //----------------------------------------------------------------------
-int main(const int argc, char** argv)
+int __main(const int argc, char** argv)
 {
-  try
-  {
-    process_cmd_line(argc,argv);
+  process_cmd_line(argc,argv);
 
+  // define application services required by exio objects
+  exio::Config config;
 
-    // define application services required by exio objects
-    exio::Config config;
+  // TODO: allow the error level to be specified by config
 
-    // TODO: allow the error level to be specified by config
+  exio::ConsoleLogger::Levels loglevel = exio::ConsoleLogger::eNone;
+  if (program_options.verbose > 0 ) loglevel = exio::ConsoleLogger::eWarn;
+  if (program_options.verbose > 1 ) loglevel = exio::ConsoleLogger::eInfo;
+  if (program_options.verbose > 2 ) loglevel = exio::ConsoleLogger::eAll;
 
-    exio::ConsoleLogger::Levels loglevel = exio::ConsoleLogger::eNone;
-    if (program_options.verbose > 0 ) loglevel = exio::ConsoleLogger::eWarn;
-    if (program_options.verbose > 1 ) loglevel = exio::ConsoleLogger::eInfo;
-    if (program_options.verbose > 2 ) loglevel = exio::ConsoleLogger::eAll;
+  exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
+                             loglevel,
+                             program_options.verbose>3);
 
-    exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
-                               loglevel,
-                               program_options.verbose>3);
+  exio::ConsoleLogger* logptr = &logger;
 
-    exio::ConsoleLogger* logptr = &logger;
+  exio::AppSvc appsvc(config, &logger);
 
-    exio::AppSvc appsvc(config, &logger);
+  /* Create a socket and connect */
 
-    /* Create a socket and connect */
-
-    int fd = connect_ipv4(program_options.addr.c_str(),
-                          program_options.port.c_str());
-    if (!fd) return 1;
+  int fd = connect_ipv4(program_options.addr.c_str(),
+                        program_options.port.c_str());
+  if (!fd) return 1;
 
 #if defined (IP_TOS) && defined (IPTOS_LOWDELAY) && defined (IPPROTO_IP)
-    /* To  minimize delays for interactive traffic.  */
+  /* To  minimize delays for interactive traffic.  */
+  {
+    int tos = IPTOS_LOWDELAY;
+    if (setsockopt (fd, IPPROTO_IP, IP_TOS,
+                    (char *) &tos, sizeof (int)) < 0)
     {
-      int tos = IPTOS_LOWDELAY;
-      if (setsockopt (fd, IPPROTO_IP, IP_TOS,
-                      (char *) &tos, sizeof (int)) < 0)
-      {
-        int __errno = errno;
-        _WARN_(logptr, "setsockopt (IP_TOS): "
-               << __errno); // TODO: add strerr
-      }
+      int __errno = errno;
+      _WARN_(logptr, "setsockopt (IP_TOS): "
+             << __errno); // TODO: add strerr
     }
+  }
 #endif
 
 #ifdef SO_KEEPALIVE
-        /* Set keepalives on the socket to detect dropped connections. */
-        {
-          int keepalive = 1;
-          if (setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE,
-                          (char *) &keepalive, sizeof (keepalive)) < 0)
-          {
-            int __errno = errno;
-            _WARN_(logptr, "setsockopt (SO_KEEPALIVE): "
-                   << __errno); // TODO: add strerr
-          }
-        }
+  /* Set keepalives on the socket to detect dropped connections. */
+  {
+    int keepalive = 1;
+    if (setsockopt (fd, SOL_SOCKET, SO_KEEPALIVE,
+                    (char *) &keepalive, sizeof (keepalive)) < 0)
+    {
+      int __errno = errno;
+      _WARN_(logptr, "setsockopt (SO_KEEPALIVE): "
+             << __errno); // TODO: add strerr
+    }
+  }
 #endif
 
 
+  exio::Reactor reactor(appsvc.log());
 
+  AdminListener listener;
 
-    // TODO: build up an admin service ID
+  if (program_options.cmd.empty()) listener.show_unsol_messages(true);
 
-    AdminListener listener;
+  exio::AdminSession adminsession(appsvc, fd, &listener, 1);
+  exio::AdminSession* sptr = &adminsession;
 
-    if (program_options.cmd.empty()) listener.show_unsol_messages(true);
+  //exio::AdminSession* sptr = new exio::AdminSession(appsvc, fd, &listener, 1);
 
-    exio::AdminSession adminsession(appsvc, fd, &listener, 1);
+  sptr->init(&reactor);
 
-    // Generate a logon message
+  // Generate a logon message
 
-    // TODO: once the ximon is able to send logon messages first, then we won't
-    // do this until a logon has been received from the remote.
-    std::string serviceid = build_service_id(argv[0]);
-    sam::txMessage logon(exio::id::msg_logon);
-    logon.root().put_field(exio::id::QN_serviceid, serviceid);
-    logon.root().put_field(exio::id::QN_head_user, build_user_id());
+  // TODO: once the ximon is able to send logon messages first, then we won't
+  // do this until a logon has been received from the remote.
+  std::string serviceid = build_service_id(argv[0]);
+  sam::txMessage logon(exio::id::msg_logon);
+  logon.root().put_field(exio::id::QN_serviceid, serviceid);
+  logon.root().put_field(exio::id::QN_head_user, build_user_id());
 
-    if (not program_options.cmd.empty())
-    {
-      /* because we are going to send a command, lets include the
-       * no-automatic-subscription flag in the logon*/
-      logon.root().put_field(exio::id::QN_noautosub,
-                             exio::id::True);
-
-      /* We are sending a command. By default, indicate to the server that we
-       * want them to close our connection once the adim command completes. */
-      logon.root().put_field(QNAME(exio::id::head, exio::id::autoclose),
-                                   exio::id::True);
-    }
-    adminsession.enqueueToSend( logon );
-
-
-    if ( not program_options.cmd.empty() )
-    {
-      /*
-       * Generate a message to represent a command request
-       */
-      sam::txMessage msg(exio::id::msg_request);
-
-      // head
-      msg.root().put_field(exio::id::QN_command, program_options.cmd);
-      sam::txContainer& head = msg.root().put_child(exio::id::head);
-
-      std::ostringstream os;
-      os << program_options.addr << ":" << program_options.port;
-      head.put_field(exio::id::dest, os.str());
-
-      head.put_field(exio::id::source, serviceid);
-      head.put_field(exio::id::user, build_user_id());
-      head.put_field(exio::id::reqseqno, "0");
-
-      // body
-      sam::txContainer& body = msg.root().put_child(exio::id::body);
-
-      // for legacy reasons, we also have to place the command into the messge
-      // body
-      body.put_field(exio::id::command, program_options.cmd);
-
-      add_arguments(body, program_options.cmdargs);
-
-      if (adminsession.enqueueToSend( msg ) )
-      {
-        exit(1); // exit, to prevent other threads for detaining us
-      }
-    }
-
-
-    return listener.wait_for_session_closure();
-  }
-  catch (const std::exception& e)
+  if (not program_options.cmd.empty())
   {
-    std::cout << e.what() << "\n";
-    exit(1);  // exit, to prevent other threads for detaining us
+    /* because we are going to send a command, lets include the
+     * no-automatic-subscription flag in the logon*/
+    logon.root().put_field(exio::id::QN_noautosub,
+                           exio::id::True);
+
+    /* We are sending a command. By default, indicate to the server that we
+     * want them to close our connection once the adim command completes. */
+    logon.root().put_field(QNAME(exio::id::head, exio::id::autoclose),
+                           exio::id::True);
+  }
+  sptr->enqueueToSend( logon );
+
+
+  if ( not program_options.cmd.empty() )
+  {
+    /*
+     * Generate a message to represent a command request
+     */
+    sam::txMessage msg(exio::id::msg_request);
+
+    // head
+    msg.root().put_field(exio::id::QN_command, program_options.cmd);
+    sam::txContainer& head = msg.root().put_child(exio::id::head);
+
+    std::ostringstream os;
+    os << program_options.addr << ":" << program_options.port;
+    head.put_field(exio::id::dest, os.str());
+
+    head.put_field(exio::id::source, serviceid);
+    head.put_field(exio::id::user, build_user_id());
+    head.put_field(exio::id::reqseqno, "0");
+
+    // body
+    sam::txContainer& body = msg.root().put_child(exio::id::body);
+
+    // for legacy reasons, we also have to place the command into the messge
+    // body
+    body.put_field(exio::id::command, program_options.cmd);
+
+    add_arguments(body, program_options.cmdargs);
+
+    if (sptr->enqueueToSend( msg ) )
+    {
+      std::cerr << "failed to send request" << std::endl;
+      exit(1); // exit, to prevent other threads for detaining us
+    }
   }
 
+  int retval = 0;
+  retval = listener.wait_for_session_closure();
+  return retval;
 }
 
+//----------------------------------------------------------------------
+int main(const int argc, char** argv)
+{
+  int retval = 125;
+  try
+  {
+    retval = __main(argc, argv);
+  }
+  catch(const std::exception& e)
+  {
+    std::cout << "exception: " << e.what()  << std::endl;
+    retval = 126;
+  }
+  catch(...)
+  {
+    std::cout << "exception: unknown" << std::endl;
+    retval = 127;
+  }
+
+  /* Use _exit to exit immediately.  This is ensure that the program does not
+   * get stuck anywhere, eg, in any of the atexit routines. This is important
+   * because the admin program might be used in control scripts. */
+  std::cout.flush();
+  std::cerr.flush();
+  _exit(retval);
+}
