@@ -75,39 +75,6 @@ namespace sam
     }
   };
 
-//----------------------------------------------------------------------
-
-class ParseError : public std::exception
-{
-  public:
-    ParseError(const std::string & ,
-               const std::list<std::string>& );
-
-    ~ParseError() throw();
-
-    virtual const char* what() const throw();
-
-  private:
-    std::string m_msg;
-};
-
-//----------------------------------------------------------------------
-
-class MsgError : public std::runtime_error
-{
-  public:
-    MsgError(const std::string & error,
-             const std::string& field);
-
-    ~MsgError() throw();
-
-    const std::string& field() const;
-    const std::string& error() const;
-
-  private:
-    std::string m_error;
-    std::string m_field;
-};
 
 //----------------------------------------------------------------------
 
@@ -249,7 +216,7 @@ class txContainer : public txItem
 
     /* Constuction, assignment, clone */
 
-    txContainer() {}
+    txContainer();
     explicit txContainer(const std::string& name);
     txContainer(const txContainer&);
     virtual txContainer* clone() const;
@@ -365,7 +332,6 @@ class txMessage
     bool empty() const { return m_root.empty(); }
 
   private:
-
     txContainer m_root;
 };
 
@@ -520,7 +486,7 @@ class SAMProtocol
 {
   public:
 
-    SAMProtocol(exio::AppSvc& appsvc);
+    SAMProtocol(exio::AppSvc& appsvc); // TODO: should only need logsvc
 
     /* Attempt to encode the message into the buffer provided. The buffer will
      * expand as required. */
@@ -556,8 +522,7 @@ class SAMProtocol
      *
      * will throw runtime_error if there is a decoding problem
      */
-    size_t decodeMsg(txMessage& msg, int& msg_count,
-                     const char* start, const char* end);
+    size_t decodeMsg(txMessage& msg, const char* start, size_t len);
 
     static bool isSpecialChar(char c);
 
@@ -586,25 +551,8 @@ class SAMProtocol
     void encode_contents(exio::SamBuffer*, const txContainer* msg);
     void encode_contents_calc(const txContainer* msg, size_t& n);
 
-
-
-    /** Store a history of fields that have been processed.  Used for
-     * building error context information when parsing errors arise.
-     */
-    std::list<std::string> m_hist;
-
-    /** If true, then parsing history is built up for each message
-     * processed
-     */
-    bool m_usehist;
-
     exio::AppSvc& m_appsvc;
 };
-
-inline txContainer::txContainer(const std::string& name)
-  : txItem( name )
-{
-}
 
 // inline bool txContainer::has_any(const std::string& f)   const
 // {

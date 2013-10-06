@@ -74,49 +74,6 @@ namespace /* unnamed namespace for internal linkage*/
 namespace sam
 {
 
-
-//======================================================================
-ParseError::ParseError(const std::string & error,
-                       const std::list<std::string>& hist)
-{
-  std::ostringstream os;
-  os << error;
-
-  if ( hist.size() )
-  {
-    os << ". Trace: ";
-    for (std::list<std::string>::const_iterator i = hist.begin();
-         i != hist.end(); )
-    {
-      os << *i;
-      i++;
-      if (i != hist.end()) os << ", ";
-    }
-  }
-
-  m_msg = os.str();
-}
-
-
-ParseError::~ParseError() throw() {}
-
-const char* ParseError::what() const throw()  { return m_msg.c_str(); }
-
-//======================================================================
-
-
-MsgError::MsgError(const std::string & error, const std::string& field)
-  : std::runtime_error(error + ": " + field),
-    m_error(error),
-    m_field(field)
-{
-}
-
-MsgError::~MsgError() throw() {}
-
-const std::string& MsgError::field() const { return m_field; }
-const std::string& MsgError::error() const { return m_error; }
-
 //======================================================================
 
 std::ostream& operator<<(std::ostream& os, const qname& q)
@@ -424,18 +381,19 @@ void SAMProtocol::encode_contents_calc(const txContainer* c, size_t& n)
 
 //----------------------------------------------------------------------
 size_t SAMProtocol::decodeMsg(txMessage& msg,
-                              int& msg_count,
                               const char* start,
-                              const char* end)
+                              size_t len )
 {
+  const char* const end = start + len;
+
+  // TODO: need to handle messages that are too large.  I,e test that connection is dropped.
+
   // Define max message len as approx 2G 2147483647.
-  static double max_msglen = 2147483647;
-  msg_count = 0;
+  static size_t max_msglen = 2147483647;
 
   size_t consumed = 0;
-  m_hist.clear();
 
-  while (start < end)  // while data is avail
+  if (start < end)
   {
     size_t bytesavail = end - start;
 
@@ -443,10 +401,12 @@ size_t SAMProtocol::decodeMsg(txMessage& msg,
      * here we don't know how many bytes are used for the msg length. So we
      * only detect the SAM type. */
     size_t const head_len = 1 + 7 + 1 ; //   {SAM0100:
-    if (bytesavail < head_len ) break;
+    if (bytesavail < head_len ) return 0;
 
     if ((*start != MSG_START) or (start[8] != META_DELIM))
+    {
       throw std::runtime_error("bad SAM header");
+    }
 
     bool sam_ver_supported = false;
     if ( memcmp(start+1,SAM0100,7) == 0)
@@ -462,51 +422,63 @@ size_t SAMProtocol::decodeMsg(txMessage& msg,
        ~~~~~~~~~~~~~~~~~~~
 
        {SAM0100:00065:request:[head=[command=,],body=[args_COUNT=0,],]}
-       {SAM0100:111:x:}
-       {SAM0101:2147483647:x:}
+       {SAM0101:2147483647:x:
        01234567890123
     */
 
 
     /* Decode the message length, without making any assumption about how many
      * bytes are used for the msglen section. */
-
     const char* p = start + head_len;
-    double msglen = 0;
-    while (p < end and isdigit(*p) and *p != sam::META_DELIM)
+    size_t msglen = 0;
+
+    while (p < end and isdigit(*p))
     {
       msglen = (msglen * 10) + (*p bitand 0x0F);
-      p++;
 
       // protect our application by assuming a max message size
       if (msglen > max_msglen)
       {
-        throw std::runtime_error("SAM message exceeds maximum size");
+        throw std::runtime_error("SAM message exceeds maximum length");
       }
+
+      p++;
     }
 
-    if (*p != sam::META_DELIM) break; // not enough data for header
-    if (bytesavail < msglen)   break; // not enough data for body
+    if (p >= end) return 0; // not enough data for msglen
+
+
+    if (*p != sam::META_DELIM)
+      throw std::runtime_error("SAM header bad msglen");
+
+    const char* const msgend = start + msglen;
+
+    if (bytesavail < msglen) return 0; // not enough data for body
 
     if (sam_ver_supported)
     {
       p++;  // skip META_DELIM
 
-      /* ----- message name ----- */
-      std::ostringstream os;
-      while (p < end and *p != sam::META_DELIM)
+      // Extract message name
+      std::string vs;
+      vs.reserve(50);
+
+      while (p < msgend and *p != sam::META_DELIM)
       {
         if (*p == sam::ESCAPE) p++;
-        if (p < end) os << *p;
+        if (p < msgend) vs.append(1, *p);
         p++;
       }
+
+      if (p >= msgend or *p != sam::META_DELIM)
+        throw std::runtime_error("SAM header missing message type");
+
       p++;  // skip META_DELIM
 
       msg.reset();
-      msg.type(os.str());
+      msg.type(vs);
 
-      decode(&(msg.root()), p, p+(size_t)msglen);
-      msg_count++;
+      decode(&(msg.root()), p, msgend);
     }
     else
     {
@@ -515,7 +487,6 @@ size_t SAMProtocol::decodeMsg(txMessage& msg,
     }
 
     consumed += msglen;
-    break;  // at the moment we only decode one message at a time
   }
 
   return consumed;
@@ -540,11 +511,13 @@ const char* SAMProtocol::decode(txContainer* parent,
 
     /* ----- decode fieldname ----- */
 
-    std::ostringstream fieldname;
+    std::string fieldname;
+    fieldname.reserve(50);
+
     while (p < end and *p != sam::VALUE_DELIM)
     {
       if (*p == sam::ESCAPE) p++;
-      if (p < end) fieldname << *p;
+      if (p < end) fieldname.append(1,*p);
       p++;
     }
 
@@ -553,29 +526,28 @@ const char* SAMProtocol::decode(txContainer* parent,
 
     p++; // skip the VALUE_DELIM
 
-    m_hist.push_back(fieldname.str());
-
     /* ----- decode field-value ----- */
 
     if ( *p == SEQ_START)
     {
       // we have found a sub container
-      txContainer& subcont = parent->put_child( fieldname.str() );
+      txContainer& subcont = parent->put_child( fieldname );
       p = decode(&subcont, p, end); // recursive
     }
     else
     {
       // simple value string
-      std::ostringstream value;
+      std::string value;
+      value.reserve(50);
 
       while (p < end && *p != sam::FIELD_DELIM)
       {
         if (*p == sam::ESCAPE) p++;
-        if (p < end) value << *p;
+        if (p < end) value.append(1,*p);
         p++;
       }
 
-      parent->put_field(fieldname.str(), value.str());
+      parent->put_field(fieldname, value);
     }
 
     if (p >= end)
@@ -593,7 +565,7 @@ const char* SAMProtocol::decode(txContainer* parent,
 /** Raise an exception to indicate a parsing exception. */
 void SAMProtocol::fail(const char* error)
 {
-  throw ParseError(error, m_hist);
+  throw std::runtime_error(error);
 }
 
 //======================================================================
@@ -782,6 +754,15 @@ txContainer::~txContainer()
   }
 }
 //----------------------------------------------------------------------
+txContainer::txContainer()
+{
+}
+//----------------------------------------------------------------------
+txContainer::txContainer(const std::string& name)
+  : txItem( name )
+{
+}
+//----------------------------------------------------------------------
 
 // copy constructor
 txContainer::txContainer(const txContainer& rhs)
@@ -804,7 +785,6 @@ txContainer & txContainer::operator=(const txContainer & rhs)
   // TODO: how would I actually use the SWAP idiom here?  I think I need to
   // have an impl class, which is just a struct that contains all of the raw
   // data.
-
 
   this->clear();
 
@@ -910,7 +890,6 @@ void txContainer::clear()
 
   // now clear out our state
   m_items.clear();
-//  m_item_map.clear();
   m_field_map.clear();
   m_child_map.clear();
 }
