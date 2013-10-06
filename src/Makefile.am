@@ -7,6 +7,8 @@ AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall
 
 AM_LDFLAGS=-pthread
 
+#XLOGHOME=/home/darrens/work/dev/src/c++/xlog/install
+#LDADD = -L../libexio -lexio $(LIBLS) -L$(XLOGHOME)/lib -lxlog
 LDADD = -L../libexio -lexio $(LIBLS)
 
 bin_PROGRAMS=admin
