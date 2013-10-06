@@ -19,12 +19,12 @@
 */
 #include "exio/AdminSession.h"
 #include "exio/AdminInterface.h"
-#include "exio/AdminIO.h"
 #include "exio/Logger.h"
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/utils.h"
 #include "exio/SamBuffer.h"
+#include "exio/Reactor.h"
 
 #include "mutex.h"
 
@@ -36,6 +36,32 @@
 #include <stdlib.h>
 
 namespace exio {
+
+
+struct QueuedItem
+{
+    /* number of bytes actually used */
+    size_t   size;
+
+    enum Flags
+    {
+      eDeleteAfterUse = 0x01, // not supported
+      eThreadKill     = 0x02
+
+    };
+    unsigned int flags;
+
+    const char* buf() const;
+
+    QueuedItem();
+
+    void release();
+
+    exio::SamBuffer * sb() { return &m_sb; }
+
+  private:
+    exio:: DynamicSamBuffer m_sb;
+};
 
 
 SID SID::no_session = SID();
@@ -170,6 +196,7 @@ AdminSession::AdminSession(AppSvc& appsvc,
                            size_t id)
   : m_appsvc( appsvc),
     m_id(id),
+    m_fd(fd),
 //    m_id(AdminSessionIdGenerator::next_admin_sessionid(), fd),
     m_logon_received(false),
     m_session_valid(true),
@@ -179,27 +206,46 @@ AdminSession::AdminSession(AppSvc& appsvc,
     m_hb_intvl(30),
     m_hb_last(time(NULL)),
     m_start( m_hb_last ),
-    m_io( new AdminIO(m_appsvc, fd, this ))
+    m_samp(m_appsvc),
+    m_io_handle(NULL)
 {
 }
+
+//----------------------------------------------------------------------
+void AdminSession::init(Reactor* reactor)
+{
+  // once the client is constructed, we can immediately send data and also
+  // receive callbacks (if there is data on the socket).
+
+  // note, we do this in init(), rather than in the constructor, is so that
+  // the user of AdminSession can better control when data starts arriving off
+  // the socket, and so also when callbacks start going into the rest of the
+  // program.
+
+  m_io_handle = new Client(reactor, m_fd, m_appsvc.log(), this);
+  reactor->add_client( m_io_handle );
+}
+
 //----------------------------------------------------------------------
 AdminSession::~AdminSession()
 {
-  if ( not m_io->safe_to_delete() )
+  // TODO: need mutex protection around m_io_handle.  Well, probably is ok,
+  // since the write is done in the destructor, ie, should be no more method
+  // calls after this.
+  if (m_io_handle)
   {
-    _WARN_(m_appsvc.log(),
-           "Deleting session IO object, but it is not yet safe to delete!");
+    m_io_handle->release(); // disables callbacks, etc.
+    m_io_handle = NULL;
   }
-
-  delete m_io;
 }
 //----------------------------------------------------------------------
 void AdminSession::log_thread_ids(std::ostream& os) const
 {
-  os << "reader (LWP " << m_io->reader_lwp()
-     << " / pthread " << m_io->reader_pth()  << ") "
-     << "writer (LWP " << m_io->writer_lwp()
-     << " / pthread " << m_io->writer_pth() << ")";
+  if ( m_io_handle )
+  {
+    os << "task (LWP" << m_io_handle->task_lwp()
+       << " / pthread " <<  m_io_handle->task_tid() << ")";
+  }
 }
 //----------------------------------------------------------------------
 
@@ -219,69 +265,60 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
   //   _INFO_(m_appsvc.log(), "Sending: " << os.str() );
   // }
 
-  if (m_io)
+  QueuedItem qi;
+  sam::SAMProtocol protocol(m_appsvc);
+
+  try
   {
-    QueuedItem qi;
-    sam::SAMProtocol protocol(m_appsvc);
+    qi.size = protocol.encodeMsg(msg, qi.sb());
 
-    try
-    {
-      qi.size = protocol.encodeMsg(msg, qi.sb());
-
-      /*
+    if (m_io_handle) m_io_handle->queue(qi.buf(), qi.size, false);
+    /*
       size_t sz = protocol.calc_encoded_size(msg);
       _INFO_(m_appsvc.log(), "estimated " << sz << ", actual " << qi.size);
-      */
+    */
 
-      m_io->enqueue( qi );
-      return false;  // success
-    }
-    catch (sam::OverFlow& err)
-    {
-      // If we arrive here, the message could not be encoded.
-      size_t sz = protocol.calc_encoded_size(msg);
-      _ERROR_(m_appsvc.log(), "Failed to send "
-              << msg.type() <<  " message due to encode exception: "
-              << err.what()
-              << " (expected size was " << sz << ")");
-
-      // // TODO experimental
-      // size_t n = protocol.calcEncodeSize(msg);
-      // _INFO_(m_appsvc.log(), "Estimate size required: " << n);
-
-      // size_t tmpsz = (size_t) (n * 1.10);
-      // char * tmp = new char[ tmpsz ];
-      // memset(tmp, 0, tmpsz);
-
-      // try
-      // {
-      //   size_t len = protocol.encodeMsg(msg, tmp, tmpsz);
-      //   _INFO_(m_appsvc.log(), "Encoding works, used a length of " << len
-      //          << ": " << tmp)
-      // }
-      // catch (...)
-      // {
-      //   _ERROR_(m_appsvc.log(), "Encoding still did not work");
-      // }
-      // delete [] tmp;
-    }
-    catch (std::exception& err)
-    {
-      _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
-              << msg.type() <<  " message due to exception: "
-              << err.what());
-    }
-    catch (...)
-    {
-      _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
-              << msg.type() <<  " message due to unknown exception");
-    }
+    return false;  // success
   }
-  else
+  catch (sam::OverFlow& err)
+  {
+    // If we arrive here, the message could not be encoded.
+    size_t sz = protocol.calc_encoded_size(msg);
+    _ERROR_(m_appsvc.log(), "Failed to send "
+            << msg.type() <<  " message due to encode exception: "
+            << err.what()
+            << " (expected size was " << sz << ")");
+
+    // // TODO experimental
+    // size_t n = protocol.calcEncodeSize(msg);
+    // _INFO_(m_appsvc.log(), "Estimate size required: " << n);
+
+    // size_t tmpsz = (size_t) (n * 1.10);
+    // char * tmp = new char[ tmpsz ];
+    // memset(tmp, 0, tmpsz);
+
+    // try
+    // {
+    //   size_t len = protocol.encodeMsg(msg, tmp, tmpsz);
+    //   _INFO_(m_appsvc.log(), "Encoding works, used a length of " << len
+    //          << ": " << tmp)
+    // }
+    // catch (...)
+    // {
+    //   _ERROR_(m_appsvc.log(), "Encoding still did not work");
+    // }
+    // delete [] tmp;
+  }
+  catch (std::exception& err)
   {
     _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
-            << msg.type() <<  " message because IO object not available");
-
+            << msg.type() <<  " message due to exception: "
+            << err.what());
+  }
+  catch (...)
+  {
+    _ERROR_(m_appsvc.log(), "Failed to encode/enqueue "
+            << msg.type() <<  " message due to unknown exception");
   }
 
   return true; // failure
@@ -291,7 +328,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 void AdminSession::close()
 {
-  m_io->request_stop();
+  if (m_io_handle) m_io_handle->close();
 }
 
 //----------------------------------------------------------------------
@@ -352,12 +389,15 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
     /* NOTE: we allow logon to continue further up the stack */
   }
 
-  if (m_listener) m_listener->session_msg_received( msg, *this);
+  if (m_listener)
+  {
+    m_listener->session_msg_received( msg, *this);
+  }
 }
 
 //----------------------------------------------------------------------
 
-void AdminSession::io_closed()  // callback, from IO
+void AdminSession::process_close(Client*)  // callback, from IO
 {
   m_session_valid = false;
 
@@ -371,13 +411,18 @@ void AdminSession::io_closed()  // callback, from IO
 
 bool AdminSession::safe_to_delete() const
 {
-  return (m_session_valid==false and m_io->safe_to_delete());
+  /* we only consider safe to delete once the io has been closed */
+  return (m_session_valid==false and
+          ((m_io_handle and m_io_handle->iovalid() == false) or (m_io_handle==NULL))
+    );
 }
 
 //----------------------------------------------------------------------
 void AdminSession::housekeeping()
 {
-  if ((!m_io) or (m_hb_intvl==0)) return;
+  if ((m_hb_intvl==0) or
+      (m_io_handle==NULL) or
+      (not m_io_handle->iovalid())) return;
 
   time_t now = time(NULL);
 
@@ -396,29 +441,89 @@ void AdminSession::housekeeping()
   }
 }
 //----------------------------------------------------------------------
-time_t        AdminSession::start_time() const
+time_t AdminSession::start_time() const
 {
   return m_start;
 }
 //----------------------------------------------------------------------
-time_t        AdminSession::last_write() const
+time_t  AdminSession::last_write() const
 {
-  return (m_io)? m_io->last_write():0;
+  return (m_io_handle)? m_io_handle->last_write():0;
 }
 //----------------------------------------------------------------------
-unsigned long AdminSession::bytes_out()  const
+size_t AdminSession::bytes_out()  const
 {
-  return (m_io)? m_io->bytes_out():0;
+  return (m_io_handle)? m_io_handle->bytes_out():0;
 }
 //----------------------------------------------------------------------
-unsigned long AdminSession::bytes_in()   const
+size_t AdminSession::bytes_in()   const
 {
-  return (m_io)? m_io->bytes_in():0;
+  return (m_io_handle)? m_io_handle->bytes_in():0;
 }
 //----------------------------------------------------------------------
-unsigned long AdminSession::bytes_pend() const
+size_t AdminSession::bytes_pend() const
 {
-  return (m_io)? m_io->bytes_pending():0;
+  return (m_io_handle)? m_io_handle->pending_out():0;
+}
+//----------------------------------------------------------------------
+int AdminSession::fd() const
+{
+  return (m_io_handle)? m_io_handle->fd():0;
+}
+//----------------------------------------------------------------------
+size_t AdminSession::process_input(Client*, const char* src, int size)  // callback, from IO
+{
+  sam::txMessage msg;
+  size_t consumed = 0;
+
+  /* TODO: need to carefully review this method */
+
+  try
+  {
+    // TODO: this could either work, or, fail, or partly fail.  For the partly
+    // fail, maybe we should make sure we can decode the initial successfully decoded message?
+
+    consumed = m_samp.decodeMsg(msg, src, size);
+  }
+  catch (const std::exception& e)
+  {
+
+
+    _ERROR_(m_appsvc.log(),
+            "Closing connection due to protocol error: " << e.what());
+
+    // send error reply
+    sam::txMessage badmsg("badmsg"); // TODO: would be nice to include an error string?
+    badmsg.root().put_field("msg", e.what());
+
+    // TODO: this sending of a badmsg reply has not yet been tested
+    try
+    {
+      enqueueToSend( badmsg );
+    }
+    catch (...) {  }
+
+    if (m_io_handle) m_io_handle->queue(0, 0, true); // this will close the IO
+  }
+
+  /* raw data has been decoded, so now pass to the client */
+  if (consumed)
+  {
+    try
+    {
+      this->io_onmsg( msg );
+    }
+    catch(const std::exception& err)
+    {
+      _ERROR_(m_appsvc.log(), "exception when processing message: " << err.what());
+    }
+    catch(...)
+    {
+      _ERROR_(m_appsvc.log(), "unknown exception when processing message");
+    }
+  }
+
+  return consumed;
 }
 //----------------------------------------------------------------------
 

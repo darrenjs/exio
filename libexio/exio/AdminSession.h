@@ -20,8 +20,9 @@
 #ifndef EXIO_ADMINSESSION_H
 #define EXIO_ADMINSESSION_H
 
-#include "exio/AdminIOListener.h"
 #include "exio/AdminSessionID.h"
+#include "exio/Client.h"
+#include "exio/sam.h"
 
 #include <list>
 #include <iostream>
@@ -35,11 +36,11 @@ namespace exio
 {
 
 class AdminInterface;
-class AdminIO;
 class AppSvc;
+class Reactor;
 
 
-class AdminSession : public AdminIOListener
+  class AdminSession : public ClientCallback
 {
   public:
 
@@ -65,6 +66,8 @@ class AdminSession : public AdminIOListener
                  size_t id);
     ~AdminSession();
 
+    void init(Reactor* reactor);
+
     /* Error code indicates success.  Zero/false means no error.  Other
      * returns value indicates encoding or IO problem. */
     bool enqueueToSend(const sam::txMessage&);
@@ -86,7 +89,6 @@ class AdminSession : public AdminIOListener
 
 
     virtual void io_onmsg(const sam::txMessage& src) ;
-    virtual void io_closed();
 
     void housekeeping();
 
@@ -97,12 +99,18 @@ class AdminSession : public AdminIOListener
 
     void log_thread_ids(std::ostream&) const;
 
+    int fd() const;
+
     // IO stats
     time_t        start_time() const;
     time_t        last_write() const;
-    unsigned long bytes_out()  const;
-    unsigned long bytes_in()   const;
-    unsigned long bytes_pend() const;
+    size_t bytes_out()  const;
+    size_t bytes_in()   const;
+    size_t bytes_pend() const;
+
+  protected:
+    virtual size_t process_input(Client*, const char*, int);
+    virtual void   process_close(Client*);
 
   private:
 
@@ -115,6 +123,8 @@ class AdminSession : public AdminIOListener
     AppSvc& m_appsvc;
     SID  m_id;
     std::string m_serviceid;  // what peer has provided via Logon
+    int m_fd;
+
     bool m_logon_received;
     bool m_session_valid;
 
@@ -133,11 +143,14 @@ class AdminSession : public AdminIOListener
 
     time_t    m_start;
 
-    AdminIO * m_io;
+    sam::SAMProtocol m_samp;
+
+    Client*  m_io_handle;
+
 };
 
   std::ostream & operator<<(std::ostream&, const SID & id);
 
-} // qm
+}
 
 #endif
