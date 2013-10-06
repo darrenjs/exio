@@ -1231,7 +1231,7 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
       if (m_sessions.reg[i].used()) count++;
 
     os << "Active: " <<  count << "\n";
-    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, Last, BytesOut, BytesIn, QueueOut\n";
+    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
 
     for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
     {
