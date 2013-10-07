@@ -277,7 +277,7 @@ int __main(int argc, char** argv)
     }
 
 
-    usleep(1000000);
+    usleep(100);
   }
   while(true) { sleep(10); }
 
