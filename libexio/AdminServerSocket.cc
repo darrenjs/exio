@@ -337,10 +337,10 @@ void AdminServerSocket::accept_TEP()
     // that we don't sleep at module startup; ie, as soon as this class is
     // instantiated, we are listening for incoming connections without delay.
     //
-    // The sleep value is now chosen to be 100ms.  This should offer
-    // protection against rapid access, and, is not too noticable for normal
+    // The sleep value is now chosen to a few tens of ms.  This should offer
+    // protection against rapid access, and, is not to noticable for normal
     // user interaction.
-    usleep( 100000 );
+    usleep( 25000 );
   } // while
 
 
