@@ -749,12 +749,6 @@ void AdminInterfaceImpl::createNewSession(int fd)
 
   if (session_index == 0) throw std::runtime_error("no more sessions allowed");
 
-  {
-    std::ostringstream os;
-    os << "new session allocated ID " << session_index;
-    _INFO_(m_appsvc.log(),  os.str() );
-  }
-
   AdminSession* session = NULL;
 
   {
@@ -784,6 +778,7 @@ void AdminInterfaceImpl::createNewSession(int fd)
 
   _INFO_(m_appsvc.log(), "Connection from "
          << session->peeraddr()
+         << ", fd " << fd
          << ", created session " << session->id());
 
   std::ostringstream os;
