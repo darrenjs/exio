@@ -102,8 +102,8 @@ class Reactor;
     int fd() const;
 
     // IO stats
-    time_t        start_time() const;
-    time_t        last_write() const;
+    time_t start_time() const;
+    time_t last_write() const;
     size_t bytes_out()  const;
     size_t bytes_in()   const;
     size_t bytes_pend() const;
