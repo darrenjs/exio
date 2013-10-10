@@ -41,17 +41,15 @@ class LogService
   public:
     virtual ~LogService() {}
 
-    virtual void debug(const std::string&  ) {}
-    virtual void info(const std::string&  ) {}
-    virtual void warn(const std::string&  ) {}
-    virtual void error(const std::string& ) {}
+    virtual void debug(const std::string& msg, const char* file, int ln) {}
+    virtual void info(const std::string& msg,  const char* file, int ln) {}
+    virtual void warn(const std::string& msg,  const char* file, int ln) {}
+    virtual void error(const std::string& msg, const char* file, int ln) {}
 
     virtual bool want_debug() { return false; }
     virtual bool want_info()  { return false; }
     virtual bool want_warn()  { return false; }
     virtual bool want_error() { return false; }
-
-    virtual bool inc_source() { return false; }
 };
 
 
@@ -72,19 +70,18 @@ class ConsoleLogger : public LogService
                   int level,
                   bool incsource=false);
 
-    virtual void debug(const std::string& );
-    virtual void info(const std::string&  );
-    virtual void warn(const std::string&  );
-    virtual void error(const std::string& );
+    virtual void debug(const std::string& msg, const char* file, int ln);
+    virtual void info(const std::string& msg,  const char* file, int ln);
+    virtual void warn(const std::string& msg,  const char* file, int ln);
+    virtual void error(const std::string& msg, const char* file, int ln);
 
     virtual bool want_debug() { return m_level <= eDebug; }
     virtual bool want_info()  { return m_level <= eInfo; }
     virtual bool want_warn()  { return m_level <= eWarn; }
     virtual bool want_error() { return m_level <= eError; }
 
-    virtual bool inc_source() { return m_incsource; }
-
   private:
+    void dolog(const char*, const std::string&, const char*, int);
     StreamType m_stream;
     bool m_incsource;
     int m_level;

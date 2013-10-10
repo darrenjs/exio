@@ -14,11 +14,10 @@
 exio::AdminInterface * ai = NULL;
 
 exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
-                           exio::ConsoleLogger::eWarn,
+                           exio::ConsoleLogger::eInfo,
                            true);
 
-//----------------------------------------------------------------------
-
+//
 struct Admin_LargeReply : public exio::AdminCommand::Callback
 {
     virtual exio::AdminResponse invoke(exio::AdminRequest& req)
@@ -51,7 +50,7 @@ struct Admin_LargeReply : public exio::AdminCommand::Callback
       std::string data = os.str();
       std::ostringstream msg;
       msg << "sending data with length " << data.size();
-      logger.info(msg.str());
+      logger.info(msg.str(),__FILE__,__LINE__);
 
       return exio::AdminResponse::success(req.reqseqno, data);
     }
@@ -95,7 +94,7 @@ struct Admin_LotsOfNumbers : public exio::AdminCommand::Callback
         std::ostringstream msg;
         data = os.str();
         msg << "sending data with length " << data.size();
-        logger.info(msg.str());
+        logger.info(msg.str(),__FILE__,__LINE__);
       }
       catch(std::bad_alloc& e)
       {

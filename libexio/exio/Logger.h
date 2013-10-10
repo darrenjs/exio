@@ -39,12 +39,7 @@ std::cout << "DEBUG: " << # X << "=[" << X << "] (" << __FILE__ << ":" << __LINE
     {                                                        \
       std::ostringstream __xx_oss;                           \
       __xx_oss << "exio: " << X ;                            \
-      if (_LOGPTR ->inc_source())                            \
-      {                                                      \
-        __xx_oss << " (" << __FILE__ << ":"                  \
-                 << __LINE__ << ")";                         \
-      }                                                      \
-      _LOGPTR->debug( __xx_oss.str() ) ;                     \
+      _LOGPTR->debug( __xx_oss.str(),__FILE__,__LINE__  ) ;  \
     }                                                        \
   }
 
@@ -55,12 +50,7 @@ std::cout << "DEBUG: " << # X << "=[" << X << "] (" << __FILE__ << ":" << __LINE
     {                                                        \
       std::ostringstream __xx_oss;                           \
       __xx_oss << "exio: " << X ;                            \
-      if (_LOGPTR ->inc_source())                            \
-      {                                                      \
-        __xx_oss << " (" << __FILE__ << ":"                  \
-                 << __LINE__ << ")";                         \
-      }                                                      \
-      _LOGPTR->info( __xx_oss.str() ) ;                      \
+      _LOGPTR->info( __xx_oss.str(),__FILE__,__LINE__  ) ;   \
     }                                                        \
   }
 
@@ -71,12 +61,7 @@ std::cout << "DEBUG: " << # X << "=[" << X << "] (" << __FILE__ << ":" << __LINE
     {                                                        \
       std::ostringstream __xx_oss;                           \
       __xx_oss << "exio: " << X ;                            \
-      if (_LOGPTR ->inc_source())                            \
-      {                                                      \
-        __xx_oss << " (" << __FILE__ << ":"                  \
-                 << __LINE__ << ")";                         \
-      }                                                      \
-      _LOGPTR->warn( __xx_oss.str() ) ;                      \
+      _LOGPTR->warn( __xx_oss.str(),__FILE__,__LINE__  ) ;   \
     }                                                        \
   }
 
@@ -87,12 +72,7 @@ std::cout << "DEBUG: " << # X << "=[" << X << "] (" << __FILE__ << ":" << __LINE
     {                                                        \
       std::ostringstream __xx_oss;                           \
       __xx_oss << "exio: " << X ;                            \
-      if (_LOGPTR ->inc_source())                            \
-      {                                                      \
-        __xx_oss << " (" << __FILE__ << ":"                  \
-                 << __LINE__ << ")";                         \
-      }                                                      \
-      _LOGPTR->error( __xx_oss.str() ) ;                     \
+      _LOGPTR->error( __xx_oss.str(),__FILE__,__LINE__  ) ;  \
     }                                                        \
   }
 
