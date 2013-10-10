@@ -26,7 +26,7 @@ class ReactorClient
 
     ReactorClient(Reactor* r, int fd);
 
-    virtual void handle_input() = 0;
+    virtual int  handle_input() = 0;
     virtual void handle_output() = 0;
     virtual void handle_close() = 0;
     virtual int  events() = 0;
@@ -94,7 +94,7 @@ class Client : public ReactorClient
     void release();
 
     /* Queue data to send */
-    void queue(const char*, size_t, bool request_close = false);
+    int queue(const char*, size_t, bool request_close = false);
     void close();
 
     /* Has peer socket been closed? */
@@ -126,7 +126,7 @@ class Client : public ReactorClient
     void request_task_thread_stop();
 
     /* Reactor callbacks */
-    void handle_input();
+    int handle_input();
     void handle_output();
     void handle_close();
     int  events();
@@ -174,6 +174,8 @@ class Client : public ReactorClient
 
     cpp11::mutex     m_cb_mtx; // callback mutex
     ClientCallback * m_cb;       // null => callbacks no longer allowed
+
+    size_t m_out_pend_max;
 
   protected:
 

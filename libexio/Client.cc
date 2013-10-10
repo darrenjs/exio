@@ -156,7 +156,10 @@ Client::Client(Reactor* reactor,
     m_io_closed(false),
     m_log_io_events(true),
     m_task_thread(NULL),
-    m_cb(cb)
+    m_task_tid(0),
+    m_task_lwp(0),
+    m_cb(cb),
+    m_out_pend_max(10*1024*1024) // TODO: take from config
 {
 
   // Danger: creation of internal thread should be last action of constructor,
@@ -384,24 +387,24 @@ modifying the list all the time.
   return 1;  // return >0 to imply thread exit
 }
 //----------------------------------------------------------------------
-void Client::handle_input()  /* REACTOR THREAD */
+int Client::handle_input()  /* REACTOR THREAD */
 {
   /* called by the reactor thread */
 
-  if ( !iovalid() ) return;
+  if ( !iovalid() ) return 0;
 
   // TODO: here, we should check how much memory is pending? Either add that
   // in, or, move to using a synchronized read/write buffer.
 
   DataChunk chunk;
 
-  ssize_t n = read(fd(), chunk.buf, EXIO_CLIENT_CHUNK_SIZE);
+  ssize_t const n = read(fd(), chunk.buf, EXIO_CLIENT_CHUNK_SIZE);
   int const _err = errno;
 
   if (m_log_io_events)
   {
     std::ostringstream os;
-    os << "read() " << n
+    os << "read(fd"<< fd()<< ") " << n
        << ", errno " << _err
        << " (" << utils::strerror(_err) << ")";
 
@@ -443,6 +446,9 @@ void Client::handle_input()  /* REACTOR THREAD */
       m_datafifo.cond.notify_all();
     }
   }
+
+  // return whether another read might be needed
+  return (n>0 and n == EXIO_CLIENT_CHUNK_SIZE);
 }
 //----------------------------------------------------------------------
 int Client::events()  /* REACTOR THREAD */
@@ -466,38 +472,54 @@ int Client::events()  /* REACTOR THREAD */
 }
 
 //----------------------------------------------------------------------
-void Client::queue(const char* buf, size_t size, bool request_close)
+int Client::queue(const char* buf, size_t size, bool closesocket)
 {
   bool invalidate_reactor = false;
 
   {
     cpp11::lock_guard<cpp11::mutex> guard( m_out_q.mutex );
 
-    if (m_out_q.acceptmore == false) return;
+    if (m_out_q.acceptmore == false) return -2;
 
     if (buf and size)
     {
-      // TODO: could throw due to out of memory
-      m_out_q.items.push_back( RawMsg(buf, size) );
-      m_out_q.itemcount++;
-      m_out_q.pending += size;
-      invalidate_reactor = true;
+      if (size > (m_out_pend_max - m_out_q.pending))
+      {
+        _ERROR_(m_logsvc, "client fd " << fd() << " reached max queue size");;
+
+        // note, since the outbound socket has probably been flow controlled,
+        // we cannot request socket shutdown via the sentinel-object, so
+        // instead, just request the reactor to terminate us from here.
+        m_out_q.acceptmore = false;
+        if (reactor()) reactor()->request_shutdown(this);
+        return -1;
+      }
+      else
+      {
+        // TODO: could throw due to out of memory
+        m_out_q.items.push_back( RawMsg(buf, size) );
+        m_out_q.itemcount++;
+        m_out_q.pending += size;
+        invalidate_reactor = true;
+      }
     }
 
-    if (request_close)
+    if (closesocket)
     {
       // TODO: could throw due to out of memory
       // push an empty item to indicate that IO thread should then perform an io
       // close after any earlier data has been written.
+      m_out_q.acceptmore = false;
       m_out_q.items.push_back( RawMsg() );
       m_out_q.itemcount++;
-      m_out_q.acceptmore = false;
       invalidate_reactor = true;
     }
 
   }
 
   if (invalidate_reactor) reactor()->invalidate();
+
+  return 0; // success
 }
 //----------------------------------------------------------------------
 void Client::close()
@@ -531,40 +553,42 @@ void Client::handle_output() /* REACTOR THREAD */
         m_out_q.itemcount = 0;
         return;
       }
-    }
 
-    // handle close-io sentinel object
-    if (*next == RawMsg())
-    {
-      if (reactor()) reactor()->request_close(this); // request controlled shutdown
-      return;
-    }
+      // handle close-io sentinel object
+      if (*next == RawMsg())
+      {
+        next->freemem();
+        m_out_q.items.erase( m_out_q.items.begin() );
+        m_out_q.itemcount--;
 
+        if (reactor()) reactor()->request_shutdown(this); // request controlled shutdown
+        return;
+      }
+    }
     /* Note: now using send() instead of write(), so that we can prevent
      * SIGPIPE from being raised */
     const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
 
-    size_t const written = next->size;
-    ssize_t n = send(fd(), next->ptr, written , flags);
+    size_t const wlen = next->size;
+    ssize_t n = send(fd(), next->ptr, wlen , flags);
     int const _err = errno;
 
     try {
       if (m_log_io_events)
       {
         std::ostringstream os;
-        os << "send(fd"<<fd()<<","<<written<<")=" << n
+        os << "send(fd"<<fd()<<","<<wlen<<")=" << n
            << ", errno " << _err
            << " (" << utils::strerror(_err) << ")";
         _DEBUG_(m_logsvc, os.str());
       }
     } catch (...){}
 
-    if (n == -1)
+    if (n < 0)
     {
       if (_err == EAGAIN or _err == EWOULDBLOCK)
       {
-        // TODO: what to do here?
-        //std::cout << "EAGAIN on socket " << fd;  // Add to logger
+        return;
       }
       else
       {
@@ -576,14 +600,14 @@ void Client::handle_output() /* REACTOR THREAD */
         return;
       }
     }
-
-    if (n>0)
+    else
     {
+      cpp11::lock_guard<cpp11::mutex> guard( m_out_q.mutex );
+
       next->eat(n);
       m_bytes_out += n;
       m_last_write = time(NULL);
 
-      cpp11::lock_guard<cpp11::mutex> guard( m_out_q.mutex );
       m_out_q.pending = (m_out_q.pending>(size_t)n)? (m_out_q.pending-n) : 0;
 
       // if all bytes written, pop from the queue
@@ -595,10 +619,9 @@ void Client::handle_output() /* REACTOR THREAD */
       }
     }
 
-    // Return to the reactor, so that other events can be serviced.
-    // get the next data item to write
-    return;
-  } // while
+    // S.tay in the while loop, to send all queued data. If we were to return
+    // too early, then too much time is spend in the reactor entering into the poll.
+  }
 }
 //----------------------------------------------------------------------
 void Client::handle_close()   /* REACTOR THREAD */
@@ -615,7 +638,6 @@ void Client::handle_close()   /* REACTOR THREAD */
 
     // request stop of the task thread (which invokes the derived-class
     // callback to notify of closure).
-    _DEBUG_(m_logsvc, "*** client: request task thread to stop");
     request_task_thread_stop();
   }
 }
@@ -645,8 +667,11 @@ void Client::release()
     m_cb = NULL;
   }
 
+  // TODO: if the shutdown approach looks like working, need to change how we
+  // hangle the request_delete.
+
   // request a close, just in case user-application forgot
-  if (reactor()) reactor()->request_close(this);
+  if (reactor()) reactor()->request_shutdown(this);
   if (reactor()) reactor()->request_delete(this);
 }
 //----------------------------------------------------------------------
