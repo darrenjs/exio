@@ -498,8 +498,45 @@ std::string build_user_id()
 {
   char username[256];
   memset(username, 0, sizeof(username));
+
+  // try, using getlogin_r
   if (getlogin_r(username, sizeof(username)) != 0)
-    strcpy(username, "unknown");
+  {
+    username[0]='\0';
+  }
+
+  // or, try cuserid
+  if (username[0]=='\0')
+  {
+    char buf_cuserid[L_cuserid*10];
+    memset(buf_cuserid, 0, sizeof(buf_cuserid));
+    cuserid(username);
+    if (buf_cuserid[0] != '\0')
+    {
+      memcpy(username, buf_cuserid, std::min(sizeof(username), sizeof(buf_cuserid)));
+    }
+  }
+
+  // or, try LOGNAME
+  if (username[0]=='\0')
+  {
+    char* s = getenv("LOGNAME");
+    if (s) strncpy(username, s, sizeof(username));
+  }
+
+  // or, try USER
+  if (username[0]=='\0')
+  {
+    char* s = getenv("USER");
+    if (s) strncpy(username, s, sizeof(username));
+  }
+
+  // default
+  if (username[0]=='\0')
+  {
+    strncpy(username, "unknown", sizeof(username));
+  }
+
   username[sizeof(username)-1] = '\0';
 
   return std::string(username);
