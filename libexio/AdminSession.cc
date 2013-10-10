@@ -243,7 +243,7 @@ void AdminSession::log_thread_ids(std::ostream& os) const
 {
   if ( m_io_handle )
   {
-    os << "task (LWP" << m_io_handle->task_lwp()
+    os << "task (LWP " << m_io_handle->task_lwp()
        << " / pthread " <<  m_io_handle->task_tid() << ")";
   }
 }
@@ -272,7 +272,14 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
   {
     qi.size = protocol.encodeMsg(msg, qi.sb());
 
-    if (m_io_handle) m_io_handle->queue(qi.buf(), qi.size, false);
+    int result;
+    if (m_io_handle) result = m_io_handle->queue(qi.buf(), qi.size, false);
+
+    if (result == -1)
+    {
+      _ERROR_(m_appsvc.log(), "Dropping slow consumer session " << m_id);
+      return true;
+    }
     /*
       size_t sz = protocol.calc_encoded_size(msg);
       _INFO_(m_appsvc.log(), "estimated " << sz << ", actual " << qi.size);
