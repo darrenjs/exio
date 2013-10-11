@@ -1213,87 +1213,119 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
 
   std::ostringstream os;
 
+  std::set<std::string> sections;
+  for (AdminRequest::Args::const_iterator i = request.args().begin();
+       i != request.args().end(); ++i)
+  {
+    sections.insert(*i);
+  }
 
-  os << "Sessions\n";
-  os << "--------\n";
-
+// or (sections.count("sections")=1))
+  if (sections.empty())
+  {
+    os << "Sessions\n";
+    os << "--------\n";
+  }
   {
     cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-    os << "Total ever created: " << m_sessions.createdCount << "\n";
 
-    size_t count = 0;
-    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
-      if (m_sessions.reg[i].used()) count++;
-
-    os << "Active: " <<  count << "\n";
-    os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
-
-    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+    if (sections.empty())
     {
-      if (not m_sessions.reg[i].used()) continue;
-      AdminSession* sptr = m_sessions.reg[i].ptr;
+      os << "Total ever created: " << m_sessions.createdCount << "\n";
 
-      os << sptr->id() << ", ";
-      os << sptr->peeraddr() << ", ";
-      os << sptr->peer_serviceid() << ", ";
-      os << sptr->username() << ", ";
-      os << sptr->logon_recevied() << ", ";
-      os << utils::datetimestamp(sptr->start_time()) << ", ";
-      os << utils::datetimestamp(sptr->last_write()) << ", ";
-      os << sptr->bytes_out() << ", ";
-      os << sptr->bytes_in() << ", ";
-      os << sptr->bytes_pend() << ", ";
-      os << "\n";
+      size_t count = 0;
+      for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+        if (m_sessions.reg[i].used()) count++;
+
+      os << "Active: " <<  count << "\n";
+    }
+
+    if (sections.empty() or (sections.count("sessions")==1))
+    {
+      os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
+
+      const char*delim="";
+      for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+      {
+        if (not m_sessions.reg[i].used()) continue;
+        AdminSession* sptr = m_sessions.reg[i].ptr;
+
+        os << sptr->id() << ", ";
+        os << sptr->peeraddr() << ", ";
+        os << sptr->peer_serviceid() << ", ";
+        os << sptr->username() << ", ";
+        os << sptr->logon_recevied() << ", ";
+        os << utils::datetimestamp(sptr->start_time()) << ", ";
+        os << utils::datetimestamp(sptr->last_write()) << ", ";
+        os << sptr->bytes_out() << ", ";
+        os << sptr->bytes_in() << ", ";
+        os << sptr->bytes_pend() << ", ";
+        os << "\n";
+      }
     }
   }
 
-  os << "\nexio threads\n------------\n";
-
-  os << "server-socket: ";
-  m_serverSocket.log_thread_ids(os); os << "\n";
+  if (sections.empty())
   {
-    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+    os << "\nexio threads\n------------\n";
+  }
 
-    bool append_delim = false;
-    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+  if (sections.empty() or (sections.count("threads")==1))
+  {
+    os << "server-socket: ";
+    m_serverSocket.log_thread_ids(os); os << "\n";
     {
-      if (m_sessions.reg[i].used())
-      {
-        if (append_delim) os << "\n";
-        os << "session " << m_sessions.reg[i].ptr->id() << ": ";
-        m_sessions.reg[i].ptr->log_thread_ids(os);
-        append_delim = true;
-      }
-    }
+      cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
 
-  //   for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
-  //        iter != m_sessions.items.end(); ++iter)
-  //   {
-  //     if (iter != m_sessions.items.begin()) os << "\n";
-  //     os << "session " << iter->first << ": ";
-  //     iter->second->log_thread_ids(os);
-  //   }
+      bool append_delim = false;
+      for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+      {
+        if (m_sessions.reg[i].used())
+        {
+          if (append_delim) os << "\n";
+          os << "session " << m_sessions.reg[i].ptr->id() << ": ";
+          m_sessions.reg[i].ptr->log_thread_ids(os);
+          append_delim = true;
+        }
+      }
+
+      //   for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
+      //        iter != m_sessions.items.end(); ++iter)
+      //   {
+      //     if (iter != m_sessions.items.begin()) os << "\n";
+      //     os << "session " << iter->first << ": ";
+      //     iter->second->log_thread_ids(os);
+      //   }
+    }
   }
 
   std::list<SID> sids;
-  os << "\n\ntables\n------\n";
 
-  std::list< std::string > tables = m_monitor.tables();
-  for (std::list<std::string>::iterator t = tables.begin();
-       t != tables.end(); ++t)
+
+  if (sections.empty())
   {
-    sids.clear();
-    m_monitor.table_subscribers(*t, sids);
-    os << *t;
-    os << ": subs=[";
-    for (std::list<SID>::iterator i = sids.begin();
-         i != sids.end(); ++i)
+    os << "\n\ntables\n------\n";
+  }
+
+  if (sections.empty() or (sections.count("tables")==1))
+  {
+    std::list< std::string > tables = m_monitor.tables();
+    for (std::list<std::string>::iterator t = tables.begin();
+         t != tables.end(); ++t)
     {
-      if (i != sids.begin()) os << ", ";
-      os << *i;
+      sids.clear();
+      m_monitor.table_subscribers(*t, sids);
+      os << *t;
+      os << ": subs=[";
+      for (std::list<SID>::iterator i = sids.begin();
+           i != sids.end(); ++i)
+      {
+        if (i != sids.begin()) os << ", ";
+        os << *i;
+      }
+      os << "], size=" << m_monitor.table_size(*t);
+      os << "\n";
     }
-    os << "], size=" << m_monitor.table_size(*t);
-    os << "\n";
   }
 
 

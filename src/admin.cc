@@ -252,7 +252,13 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
       const sam::txField* text = respdata->find_field(exio::id::text);
       if (text != NULL and text->value().size() )
       {
-        std::cout << text->value() << std::endl;
+        std::cout << text->value();
+
+        // append a newline?
+        if (text->value()[text->value().size()-1] != '\n')
+        {
+          std::cout << std::endl;
+        }
       }
     }
   }
