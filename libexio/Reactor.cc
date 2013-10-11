@@ -31,6 +31,7 @@ extern "C"
 }
 
 #include <sstream>
+#include <algorithm>
 #include <map>
 
 #include <poll.h>
@@ -113,6 +114,7 @@ class ReactorNotifQ
     // eNoEvent?
     void push_msg(const ReactorMsg& m)
     {
+      xlog_write("push_msg", __FILE__, __LINE__);
       xlog_write(ReactorMsg::str(m.type), __FILE__, __LINE__);
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
 
@@ -131,7 +133,7 @@ class ReactorNotifQ
       write(m_pipeout, &c, 1);
     }
 
-    void pull(std::list<ReactorMsg>& dest)
+    void pull(std::deque<ReactorMsg>& dest)
     {
       dest.clear();
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
@@ -143,7 +145,7 @@ class ReactorNotifQ
     }
 
   private:
-    std::list<ReactorMsg>  m_pending;
+    std::deque<ReactorMsg> m_pending;
     cpp11::mutex           m_mutex;
     int                    m_pipein;
     int                    m_pipeout;
@@ -208,7 +210,7 @@ Reactor::~Reactor()
 
   /* Stop the internal thread */
   m_is_stopping = true;
-  push_msg(ReactorMsg(ReactorMsg::eTerminate));
+  m_notifq->push_msg(ReactorMsg(ReactorMsg::eTerminate));
 
   // Ensure our thread has been joined. Note: it is criticaly important that
   // internal threads are joined with before we continue to delete other data
@@ -277,7 +279,7 @@ void Reactor::reactor_main_loop()
       cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
 
       // build the array of pollfd, and companion array of client-id's
-      for (std::set<ReactorClient*>::iterator iter = m_clients.ptrs.begin();
+      for (std::vector<ReactorClient*>::iterator iter = m_clients.ptrs.begin();
            iter != m_clients.ptrs.end(); ++iter)
       {
         ReactorClient* client = *iter;
@@ -386,9 +388,9 @@ void Reactor::reactor_main_loop()
       // Lets check if there has been an activity on the internal signal byte
       if (fdset[0].revents)
       {
-        std::list<ReactorMsg> nl;
+        std::deque<ReactorMsg> nl;
         m_notifq->pull( nl );
-        for (std::list<ReactorMsg>::iterator n = nl.begin(); n != nl.end();++n)
+        for (std::deque<ReactorMsg>::iterator n = nl.begin(); n != nl.end();++n)
         {
           handle_reactor_msg(*n);
         }
@@ -473,7 +475,7 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     {
       xlog_write("ReactorMsg::eAdd", __FILE__, __LINE__);
       cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
-      m_clients.ptrs.insert( msg.ptr );
+      m_clients.ptrs.push_back( msg.ptr );
       _DEBUG_(m_log, "reactor: added new client, fd " << msg.ptr->fd()
               << ", total clients " << m_clients.ptrs.size());
       break;
@@ -484,8 +486,12 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
       cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
 
       _DEBUG_(m_log, "reactor: destroying client, fd " << msg.ptr->fd());
+
+      std::vector<ReactorClient*>::iterator it
+        = std::find(m_clients.ptrs.begin(), m_clients.ptrs.end(), msg.ptr);
+      if (it != m_clients.ptrs.end()) m_clients.ptrs.erase(it);
       delete msg.ptr;
-      m_clients.ptrs.erase(msg.ptr);
+
       if (m_clients.ptrs.size() == 0) m_clients.ptrs_empty.notify_all();
       break;
     }

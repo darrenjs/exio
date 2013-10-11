@@ -60,22 +60,19 @@ class Reactor
 
     void handle_reactor_msg(const ReactorMsg&);
 
-
     LogService* m_log;
     cpp11::atomic_bool m_is_stopping;
 
     int m_pipefd[2]; // TODO: move into the NotifQ
-    cpp11::mutex m_pipe_writer_lock;
 
     mutable struct
     {
-        std::set<ReactorClient*> ptrs;
+        std::vector<ReactorClient*> ptrs;
         cpp11::condition_variable ptrs_empty;
         cpp11::mutex lock;
     } m_clients;
 
     ReactorNotifQ * m_notifq;
-
     cpp11::thread * m_io;
 };
 
