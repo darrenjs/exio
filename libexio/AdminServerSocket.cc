@@ -214,8 +214,8 @@ void AdminServerSocket::create_listen_socket()
 //----------------------------------------------------------------------
 void AdminServerSocket::log_thread_ids(std::ostream& os) const
 {
-  os << "accept (LWP " << m_threadid
-     << " / pthread " << m_pthreadid << ")";
+  os << "accept, " << m_threadid
+     << ", " << m_pthreadid;
 }
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()

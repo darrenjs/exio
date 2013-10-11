@@ -243,8 +243,8 @@ void AdminSession::log_thread_ids(std::ostream& os) const
 {
   if ( m_io_handle )
   {
-    os << "task LWP " << m_io_handle->task_lwp()
-       << " pthread " <<  m_io_handle->task_tid();
+    os << "task, " << m_io_handle->task_lwp()
+       << ", " <<  m_io_handle->task_tid();
   }
 }
 //----------------------------------------------------------------------
