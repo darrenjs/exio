@@ -5,10 +5,10 @@
 #include "exio/Reactor.h"
 #include "exio/ReactorReadBuffer.h"
 
-// extern "C"
-// {
-// #include <xlog/xlog.h>
-// }
+extern "C"
+{
+#include <xlog/xlog.h>
+}
 
 #include <errno.h>
 #include <poll.h>
@@ -121,7 +121,7 @@ struct RawMsg
 ReactorClient::ReactorClient(Reactor* r, int fd)
   : m_reactor(r),
     m_fd(fd),
-    m_io_open(true),
+    m_io_closed(false),
     m_bytes_out(0),
     m_bytes_in(0),
     m_last_write(time(NULL)),
@@ -153,13 +153,12 @@ Client::Client(Reactor* reactor,
                ClientCallback* cb)
   : ReactorClient(reactor, fd),
     m_logsvc(log),
-    m_io_closed(false),
     m_log_io_events(true),
     m_task_thread(NULL),
     m_task_tid(0),
     m_task_lwp(0),
     m_cb(cb),
-    m_out_pend_max(10*1024*1024) // TODO: take from config
+    m_out_pend_max(20*1024*1024) // TODO: take from config
 {
 
   // Danger: creation of internal thread should be last action of constructor,
@@ -389,6 +388,7 @@ modifying the list all the time.
 //----------------------------------------------------------------------
 int Client::handle_input()  /* REACTOR THREAD */
 {
+  xlog_write("Client::handle_input", __FILE__, __LINE__);
   /* called by the reactor thread */
 
   if ( !iovalid() ) return 0;
@@ -671,6 +671,7 @@ void Client::release()
   // hangle the request_delete.
 
   // request a close, just in case user-application forgot
+
   if (reactor()) reactor()->request_shutdown(this);
   if (reactor()) reactor()->request_delete(this);
 }

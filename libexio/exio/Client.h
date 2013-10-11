@@ -35,7 +35,7 @@ class ReactorClient
 
     Reactor* reactor() { return m_reactor; }
 
-    bool    io_open() const { return m_io_open; }
+    bool    io_open() const { return m_io_closed==false; }
 
     size_t  bytes_out()  const { return m_bytes_out; }
     size_t  bytes_in()   const { return m_bytes_in; }
@@ -45,17 +45,15 @@ class ReactorClient
   protected:
     virtual ~ReactorClient(){}
 
-    void     set_io_closed()       { m_io_open=false; }
-
   private:
     ReactorClient(const ReactorClient&);
     ReactorClient& operator=(const ReactorClient&);
 
     Reactor* m_reactor;
     int      m_fd;
-    bool     m_io_open;
 
   protected:
+    cpp11::atomic_bool m_io_closed;
     size_t   m_bytes_out;
     size_t   m_bytes_in;
     time_t   m_last_write;
@@ -98,7 +96,7 @@ class Client : public ReactorClient
     void close();
 
     /* Has peer socket been closed? */
-    bool iovalid() const { return !m_io_closed; }
+    bool iovalid() const { return !m_io_closed; }  // TODO: remove, dupllicate
 
 
     int       task_lwp() const { return m_task_lwp; }
@@ -135,7 +133,6 @@ class Client : public ReactorClient
 
     LogService* m_logsvc;
 
-    cpp11::atomic_bool m_io_closed;
 
     bool m_log_io_events;
 
