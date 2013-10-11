@@ -37,19 +37,7 @@ else
         pid=$!
         echo instance $N started with pid $pid
 
-        sleep 1
+        #sleep 1
     done
 fi
-
-
-
-
-
-
-
-
-
-
-
-
 
