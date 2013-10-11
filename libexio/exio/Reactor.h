@@ -45,6 +45,7 @@ class Reactor
     void add_client(ReactorClient*);
 
     void request_close(ReactorClient*);
+    void request_shutdown(ReactorClient*);
     void request_delete(ReactorClient*);
 
     void invalidate();
@@ -56,10 +57,6 @@ class Reactor
 
     void reactor_main_loop();
     void reactor_io_TEP();
-
-    void push_msg(const ReactorMsg&);
-
-    void handle_close_client(ReactorClient*);
 
     void handle_reactor_msg(const ReactorMsg&);
 

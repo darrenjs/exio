@@ -25,10 +25,10 @@
 #include "exio/utils.h"
 #include "exio/Logger.h"
 
-// extern "C"
-// {
-// #include <xlog/xlog.h>
-// }
+extern "C"
+{
+  #include <xlog/xlog.h>
+}
 
 #include <sstream>
 #include <map>
@@ -39,12 +39,11 @@
 #include <errno.h>
 #include <fcntl.h>              /* Obtain O_* constant definitions */
 #include <unistd.h>
+#include <sys/socket.h>
 
 #include <sys/types.h>
 #include <linux/unistd.h>
 #include <sys/syscall.h>
-
-
 
 namespace exio {
 
@@ -73,6 +72,7 @@ struct ReactorMsg
     {
       eNoEvent    = 0,
       eClose,
+      eShutdown,
       eAdd,
       eDelete,
       eTerminate   /* terminate reactor thread */
@@ -84,6 +84,7 @@ struct ReactorMsg
       {
         case eNoEvent    : return "eNoEvent";
         case eClose      : return "eClose";
+        case eShutdown   : return "eShutdown";
         case eAdd        : return "eAdd";
         case eDelete     : return "eDelete";
         case eTerminate  : return "eTerminate";
@@ -112,6 +113,7 @@ class ReactorNotifQ
     // eNoEvent?
     void push_msg(const ReactorMsg& m)
     {
+      xlog_write(ReactorMsg::str(m.type), __FILE__, __LINE__);
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
 
       // if there are queued items, then we don't need to push another
@@ -160,11 +162,11 @@ Reactor::Reactor(LogService* log)
     m_notifq(NULL),
     m_io(NULL)
 {
-  // xlog_config cfg;
-  // memset(&cfg, 0, sizeof(xlog_config));
-  // cfg.num_counters = 10;
-  // cfg.num_rows = 1000;
-  // xlog_init("/var/tmp/xlog.dat", cfg);
+  xlog_config cfg;
+  memset(&cfg, 0, sizeof(xlog_config));
+  cfg.num_counters = 10;
+  cfg.num_rows = 10000;
+  xlog_init("/var/tmp/xlog.dat", cfg);
 
   m_pipefd[0]=-1;  // reader
   m_pipefd[1]=-1;  // writer
@@ -200,7 +202,7 @@ Reactor::~Reactor()
     cpp11::unique_lock<cpp11::mutex> guard(m_clients.lock);
     while(m_clients.ptrs.empty()==false or m_clients.ptrs.size()>0)
     {
-      m_clients.ptrs_empty.wait(guard);
+      m_clients.ptrs_empty.wait (guard);
     }
   }
 
@@ -294,29 +296,26 @@ void Reactor::reactor_main_loop()
     // TODO: move this logging to a separate function
     // {
     //   std::ostringstream osin;
-    //   osin<< "@" << syscall(SYS_gettid) << " ";
     //   for (std::vector<pollfd>::const_iterator i = fdset.begin();
     //        i != fdset.end(); ++i)
     //   {
-    //     if (i != fdset.begin()) osin << ", ";
-    //     ReactorClient::ClientID cid = idmap[ i->fd ];
-    //     osin << "[";
-    //     if (cid)
-    //       osin << "id=" << cid;
-    //     else
-    //       osin << "id=pipe";
-
-    //     osin << ", fd=" << i->fd << ", events=" << i->events << "(";
-    //     eventstr(osin, i->events);
-    //     osin << ")";
-    //     osin << "]";
+    //     if (i->events)
+    //     {
+    //       osin << "[";
+    //       osin << "fd=" << i->fd << ", events=" << i->events << "(";
+    //       eventstr(osin, i->events);
+    //       osin << "),";
+    //       osin << "]";
+    //     }
     //   }
-    //   _INFO_(m_log, "reacter: into poll, events: " << osin.str() );
+    //   _DEBUG_(m_log, "reactor: into poll, events: " << osin.str() );
     // }
 
     int timeout_msec = -1;
 
     int nready = poll(&fdset[0], fdset.size(), timeout_msec);
+    xlog_write("poll-out", __FILE__, __LINE__);
+
 
     // If we are stopping, immediately exit.  No effort is made to close
     // client sockets, or ensure any pending data is written. It is the
@@ -330,20 +329,16 @@ void Reactor::reactor_main_loop()
     //   for (std::vector<pollfd>::const_iterator i = fdset.begin();
     //        i != fdset.end(); ++i)
     //   {
-    //     if (i != fdset.begin()) osout << ", ";
-    //     ReactorClient::ClientID cid = idmap[ i->fd ];
-    //     osout << "[";
-    //     if (cid)
-    //       osout << "id=" << cid;
-    //     else
-    //       osout << "id=pipe";
-
-    //     osout << ", fd=" << i->fd << ", revents=" << i->revents << "(";
-    //     eventstr(osout, i->revents);
-    //     osout << ")";
-    //     osout << "]";
+    //     if (i->revents)
+    //     {
+    //       osout << "[";
+    //       osout << "fd=" << i->fd << ", revents=" << i->revents << "(";
+    //       eventstr(osout, i->revents);
+    //       osout << "),";
+    //       osout << "]";
+    //     }
     //   }
-    //   _INFO_(m_log, "reacter: from poll, revents: " << osout.str() );
+    //   _DEBUG_(m_log, "reactor: from poll, revents: " << osout.str() );
     // }
 
 
@@ -362,12 +357,13 @@ void Reactor::reactor_main_loop()
       {
         if (iter->fd  == m_pipefd[0]) continue; // skip ctrl-msg events ... do later
 
-        ReactorClient*   ptr      = fdmap[ iter->fd ];
-        int              revents = iter->revents;
+        ReactorClient*   ptr       = fdmap[ iter->fd ];
+        int              revents   = iter->revents;
+        int              readagain = 0;
 
         if (revents bitand POLLIN)
         {
-          if (ptr->io_open()) ptr->handle_input();
+          if (ptr->io_open()) readagain = ptr->handle_input();
         }
         if (revents bitand POLLPRI)
         {
@@ -377,12 +373,13 @@ void Reactor::reactor_main_loop()
         {
           if (ptr->io_open()) ptr->handle_output();
         }
-        if ( (revents bitand POLLRDHUP) or
-             (revents bitand POLLERR) or
-             (revents bitand POLLHUP) or
-             (revents bitand POLLNVAL) )
+        if ( ((revents bitand POLLRDHUP) or
+              (revents bitand POLLERR) or
+              (revents bitand POLLHUP) or
+              (revents bitand POLLNVAL)) and !readagain)
         {
-          handle_close_client( ptr );
+          xlog_write("ptr->handle_close()", __FILE__, __LINE__);
+          ptr->handle_close();
         }
       }
 
@@ -393,7 +390,7 @@ void Reactor::reactor_main_loop()
         m_notifq->pull( nl );
         for (std::list<ReactorMsg>::iterator n = nl.begin(); n != nl.end();++n)
         {
-            handle_reactor_msg(*n);
+          handle_reactor_msg(*n);
         }
       }
     }
@@ -404,26 +401,28 @@ void Reactor::reactor_main_loop()
 
 //----------------------------------------------------------------------
 
-void Reactor::push_msg(const ReactorMsg& msg)
-{
-  m_notifq->push_msg(msg);
-}
-
-//----------------------------------------------------------------------
-
 void Reactor::invalidate()
 {
   // Danger here: this method is exposed to the user-application; they might
   // end up pushing lots of data onto the pipe.
-  push_msg(ReactorMsg(ReactorMsg::eNoEvent));
+  m_notifq->push_msg(ReactorMsg(ReactorMsg::eNoEvent));
 }
 
 //----------------------------------------------------------------------
 
 void Reactor::request_close(ReactorClient* client)
 {
+  xlog_write("request_close", __FILE__, __LINE__);
   ReactorMsg msg(ReactorMsg::eClose, client);
-  push_msg(msg);
+  m_notifq->push_msg(msg);
+}
+
+//----------------------------------------------------------------------
+
+void Reactor::request_shutdown(ReactorClient* client)
+{
+  ReactorMsg msg(ReactorMsg::eShutdown, client);
+  m_notifq->push_msg(msg);
 }
 
 //----------------------------------------------------------------------
@@ -431,7 +430,7 @@ void Reactor::request_close(ReactorClient* client)
 void Reactor::request_delete(ReactorClient* client)
 {
   ReactorMsg msg(ReactorMsg::eDelete, client);
-  push_msg(msg);
+  m_notifq->push_msg(msg);
 }
 
 //----------------------------------------------------------------------
@@ -440,34 +439,39 @@ void Reactor::add_client(ReactorClient* client)
 {
   _DEBUG_(m_log, "reactor: request to add new client, fd " << client->fd());
   ReactorMsg msg(ReactorMsg::eAdd, client);
-  push_msg(msg);
+ m_notifq-> push_msg(msg);
 }
 
-//----------------------------------------------------------------------
-
-void Reactor::handle_close_client(ReactorClient* client)
-{
-  if (client->io_open())
-  {
-    client->handle_close();
-    client->set_io_closed();
-  }
-}
 
 //----------------------------------------------------------------------
 
 void Reactor::handle_reactor_msg(const ReactorMsg& msg)
 {
+  xlog_write("ReactorMsg::handle_reactor_msg", __FILE__, __LINE__);
   switch(msg.type)
   {
-    case ReactorMsg::eNoEvent    : break;
+    case ReactorMsg::eNoEvent    : xlog_write("ReactorMsg::eNoEvent", __FILE__, __LINE__);break;
     case ReactorMsg::eClose      :
     {
-      handle_close_client(msg.ptr);
+      xlog_write("ReactorMsg::eClose", __FILE__, __LINE__);
+      xlog_write("msg.ptr->handle_close()", __FILE__, __LINE__);
+      msg.ptr->handle_close();
+      break;
+    }
+    case ReactorMsg::eShutdown     :
+    {
+      xlog_write("ReactorMsg::eShutdown", __FILE__, __LINE__);
+      if (msg.ptr->io_open())
+      {
+
+        _DEBUG_(m_log, "reactor: shutdown(fd=" << msg.ptr->fd() << ", SHUT_WR)");
+        ::shutdown(msg.ptr->fd(), SHUT_WR);
+      }
       break;
     }
     case ReactorMsg::eAdd :
     {
+      xlog_write("ReactorMsg::eAdd", __FILE__, __LINE__);
       cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
       m_clients.ptrs.insert( msg.ptr );
       _DEBUG_(m_log, "reactor: added new client, fd " << msg.ptr->fd()
@@ -476,6 +480,7 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     }
     case ReactorMsg::eDelete :
     {
+      xlog_write("ReactorMsg::eDelete", __FILE__, __LINE__);
       cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
 
       _DEBUG_(m_log, "reactor: destroying client, fd " << msg.ptr->fd());
@@ -486,6 +491,7 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     }
     case ReactorMsg::eTerminate :
     {
+      xlog_write("ReactorMsg::eTerminate", __FILE__, __LINE__);
       m_is_stopping = true; //normally already set
       break;
     }
