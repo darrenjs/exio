@@ -1244,7 +1244,6 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
     {
       os << "SessionID, PeerAddr, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
 
-      const char*delim="";
       for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
       {
         if (not m_sessions.reg[i].used()) continue;
