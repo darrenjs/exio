@@ -36,7 +36,7 @@ namespace id
       case err_unknown         : return "unknown";
       case err_admin_not_found : return "admin not found";
       case err_no_table        : return "table not found";
-      case err_missing_arg     : return "missing args";
+      case err_bad_command     : return "bad command";
       case err_no_session      : return "no session";
       default                  : return "unknown error code";
     }

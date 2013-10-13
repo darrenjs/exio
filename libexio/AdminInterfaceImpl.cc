@@ -1436,7 +1436,7 @@ AdminResponse AdminInterfaceImpl::admincmd_del_session(AdminRequest& req)
 {
   AdminResponse resp(req.reqseqno);
 
-  if (req.args().size() == 0) throw AdminError(id::err_missing_arg);
+  if (req.args().size() == 0) throw AdminError(id::err_bad_command);
 
 
   std::list<SID> sessions_stopped;
