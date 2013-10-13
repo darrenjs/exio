@@ -129,6 +129,8 @@ class DataTable
 
 
     void copy_table(AdminInterface::Table& dest) const;
+    void copy_table(std::vector<std::string> & cols,
+                    std::vector< std::vector <std::string> >& rows) const;
 
     void copy_row(const std::string& rowkey, AdminInterface::Row&) const;
 

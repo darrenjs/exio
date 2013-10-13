@@ -81,7 +81,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
 
   /* Register some admin capabilities of an admin interface */
   admin_add( AdminCommand("tables",
-                          "list tables", "",
+                          "query tables",
+                          "tables [list|show]",
                           &AdminInterfaceImpl::admincmd_list_tables, this,
                           adminattrs) );
 
@@ -980,17 +981,72 @@ AdminResponse AdminInterfaceImpl::admincmd_sessions(
 
 //----------------------------------------------------------------------
 
-AdminResponse AdminInterfaceImpl::admincmd_list_tables(
-  AdminRequest& r)
+AdminResponse AdminInterfaceImpl::admincmd_list_tables(AdminRequest& req)
 {
-  std::list< std::string > tables = m_monitor.tables();
-
-  AdminResponse resp(r.reqseqno);
-
+  AdminResponse resp(req.reqseqno);
   exio::add_rescode(resp.msg, 0);
   exio::set_pending(resp.msg, false);
 
-  exio::formatreply_simplelist(resp.body(), tables, "table");
+  if (req.args().empty()==false)
+  {
+    if (req.args()[0] == "list")
+    {
+      std::list< std::string > tables = m_monitor.tables();
+      exio::formatreply_simplelist(resp.body(), tables, "table");
+    }
+    else if (req.args()[0] == "show")
+    {
+      if (req.args().size()>1)
+      {
+        if (m_monitor.has_table( req.args()[1]) == false)
+        {
+          return AdminResponse::error(req.reqseqno,
+                                      id::err_no_table,
+                                      "table not found");
+        }
+
+        AdminInterface::Table copy;
+
+        std::vector<std::string>  cols;
+        std::vector< std::vector <std::string> > rows;
+
+         m_monitor.copy_table2(req.args()[1],cols,rows);
+
+
+         TableBuilder builder( resp.body() );
+         builder.set_columns(cols);
+
+         // TODO: here we see the design problem of the Table and Row
+         // classes. We have to assume the same field ID is used for a rowkey.
+         // But also, need to review whether a row key is always needed.
+         for (std::vector< std::vector <std::string> >::iterator r = rows.begin();
+              r != rows.end(); ++r)
+         {
+           builder.add_row(id::row_key, *r);
+        }
+         exio::add_rescode(resp.msg, 0);
+      }
+      else
+      {
+        return AdminResponse::error(req.reqseqno,
+                                    id::err_bad_command,
+                                    "missing tablename");
+      }
+    }
+    else
+    {
+      return AdminResponse::error(req.reqseqno,
+                                  id::err_bad_command,
+                                  "unknown table command");
+    }
+  }
+  else
+  {
+    return AdminResponse::error(req.reqseqno,
+                                id::err_bad_command,
+                                "missing table command");
+  }
+
 
   return resp;
 }
@@ -1095,6 +1151,13 @@ void AdminInterfaceImpl::copy_table(const std::string& tablename,
                                 AdminInterface::Table& dest) const
 {
   m_monitor.copy_table(tablename, dest);
+}
+//----------------------------------------------------------------------
+void AdminInterfaceImpl::copy_table2(const std::string& tablename,
+                                     std::vector<std::string> & cols,
+                                     std::vector< std::vector <std::string> >& rows) const
+{
+  m_monitor.copy_table2(tablename, cols, rows);
 }
 //----------------------------------------------------------------------
 void AdminInterfaceImpl::copy_row(const std::string& tablename,

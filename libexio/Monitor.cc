@@ -336,6 +336,24 @@ void Monitor::copy_table(const std::string& tablename,
   }
 }
 //----------------------------------------------------------------------
+void Monitor::copy_table2(const std::string& tablename,
+                          std::vector<std::string> & cols,
+                          std::vector< std::vector <std::string> >& rows) const
+{
+  // TODO: decision/engineering principle needed here.  Should we always keep
+  // the m_mutex lock for the entire duration of the function, or, can we give
+  // it up once we have performed the search for the table?  Need to go
+  // through what the issues are.
+
+  cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
+  TableCollection::const_iterator iter = m_tables.find(tablename);
+
+  if (iter != m_tables.end())
+  {
+    iter->second->copy_table(cols, rows);
+  }
+}
+//----------------------------------------------------------------------
 void Monitor::copy_row(const std::string& tablename,
                        const std::string& rowkey,
                        AdminInterface::Row& dest) const

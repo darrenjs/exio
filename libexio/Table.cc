@@ -561,6 +561,29 @@ void DataTable::copy_table(AdminInterface::Table& dest) const
   }
 }
 //----------------------------------------------------------------------
+void DataTable::copy_table(std::vector<std::string> & cols,
+                           std::vector< std::vector <std::string> >& rows) const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_tablelock );
+
+  cols = m_columns;
+  for (std::vector< DataRow >::const_iterator it = m_rows.begin();
+       it != m_rows.end(); ++it)
+  {
+    rows.push_back( std::vector<std::string>());
+
+    std::vector <std::string> & values = rows.back();
+    values.reserve( cols.size() );
+
+    for (std::vector<std::string>::iterator j = cols.begin();
+         j != cols.end(); ++j)
+    {
+      values.push_back( std::string() );
+      it->copy_field( *j, values.back() );
+    }
+  }
+}
+//----------------------------------------------------------------------
 void DataTable::copy_row(const std::string& rowkey,
                          AdminInterface::Row& dest) const
 {

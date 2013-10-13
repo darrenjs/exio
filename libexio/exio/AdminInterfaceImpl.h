@@ -120,6 +120,10 @@ class AdminInterfaceImpl : public AdminSession::Listener
     void copy_table(const std::string& tablename,
                     AdminInterface::Table&) const;
 
+    void copy_table2(const std::string& tablename,
+                     std::vector<std::string> & cols,
+                     std::vector< std::vector <std::string> >& rows) const;
+
     void copy_row(const std::string& tablename,
                   const std::string& rowkey,
                   AdminInterface::Row&) const;
