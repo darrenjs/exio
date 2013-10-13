@@ -42,6 +42,16 @@ class ReactorClient
     time_t  last_write() const { return m_last_write; }
     time_t  last_read()  const { return m_last_read; }
 
+    enum AttnBits
+    {
+      eWantClose    = 0x01,
+      eWantShutdown = 0x02,
+      eWantDelete   = 0x04
+    };
+
+    int attn_flag() const { return m_attn_flags; }
+
+
   protected:
     virtual ~ReactorClient(){}
 
@@ -52,12 +62,16 @@ class ReactorClient
     Reactor* m_reactor;
     int      m_fd;
 
+
   protected:
     cpp11::atomic_bool m_io_closed;
     size_t   m_bytes_out;
     size_t   m_bytes_in;
     time_t   m_last_write;
     time_t   m_last_read;
+
+  protected:
+    int      m_attn_flags;
 
     friend class Reactor;
 };

@@ -125,7 +125,8 @@ ReactorClient::ReactorClient(Reactor* r, int fd)
     m_bytes_out(0),
     m_bytes_in(0),
     m_last_write(time(NULL)),
-    m_last_read(m_last_write)
+    m_last_read(m_last_write),
+    m_attn_flags(0)
 {}
 
 
@@ -421,14 +422,16 @@ int Client::handle_input()  /* REACTOR THREAD */
     _DEBUG_(m_logsvc, "eof when reading fd " << fd());
 
     // request a controlled shutdown
-    if (reactor()) reactor()->request_close(this);
+    m_attn_flags = m_attn_flags bitor eWantClose;
+    if (reactor()) reactor()->request_attn();
   }
   else if (n < 0)
   {
     _INFO_(m_logsvc, "socket read failed: " << utils::strerror(_err) );
 
     // request a controlled shutdown
-    if (reactor()) reactor()->request_close(this);
+    m_attn_flags = m_attn_flags bitor eWantClose;
+    if (reactor()) reactor()->request_attn();
   }
   else if (n > 0 )
   {
@@ -491,7 +494,8 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
         // we cannot request socket shutdown via the sentinel-object, so
         // instead, just request the reactor to terminate us from here.
         m_out_q.acceptmore = false;
-        if (reactor()) reactor()->request_shutdown(this);
+        m_attn_flags = m_attn_flags bitor eWantShutdown;
+        if (reactor()) reactor()->request_attn();
         return -1;
       }
       else
@@ -561,7 +565,8 @@ void Client::handle_output() /* REACTOR THREAD */
         m_out_q.items.erase( m_out_q.items.begin() );
         m_out_q.itemcount--;
 
-        if (reactor()) reactor()->request_shutdown(this); // request controlled shutdown
+        m_attn_flags = m_attn_flags bitor eWantShutdown;  // request controlled shutdown
+        if (reactor()) reactor()->request_attn();
         return;
       }
     }
@@ -596,7 +601,9 @@ void Client::handle_output() /* REACTOR THREAD */
                "socket write failed, fd " << fd() << ": "
                << utils::strerror(_err) );
 
-        if (reactor()) reactor()->request_close(this); // request controlled shutdown
+        // request controlled shutdown
+        m_attn_flags = m_attn_flags bitor eWantClose;
+        if (reactor()) reactor()->request_attn();
         return;
       }
     }
@@ -634,6 +641,7 @@ void Client::handle_close()   /* REACTOR THREAD */
 
     // Note: important that we only make one call to close.
     m_io_closed = true;
+    xlog_write("::close(fd())", __FILE__, __LINE__);
     ::close(fd());
 
     // request stop of the task thread (which invokes the derived-class
@@ -672,8 +680,10 @@ void Client::release()
 
   // request a close, just in case user-application forgot
 
-  if (reactor()) reactor()->request_shutdown(this);
-  if (reactor()) reactor()->request_delete(this);
+  m_attn_flags = m_attn_flags bitor eWantShutdown;
+  m_attn_flags = m_attn_flags bitor eWantDelete;
+  if (reactor()) reactor()->request_attn();
+  xlog_write("Client::release()  completed", __FILE__, __LINE__);
 }
 //----------------------------------------------------------------------
 } // namespace exio

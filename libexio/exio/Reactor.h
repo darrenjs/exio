@@ -24,8 +24,6 @@
 #include "exio/Client.h"
 
 #include "thread.h"
-#include "condition_variable.h"
-#include "mutex.h"
 #include "atomic.h"
 
 #include <set>
@@ -44,9 +42,10 @@ class Reactor
 
     void add_client(ReactorClient*);
 
-    void request_close(ReactorClient*);
-    void request_shutdown(ReactorClient*);
-    void request_delete(ReactorClient*);
+//    void request_close(ReactorClient*);
+//    void request_shutdown(ReactorClient*);
+//    void request_release(ReactorClient*);
+    void request_attn();
 
     void invalidate();
 
@@ -59,6 +58,7 @@ class Reactor
     void reactor_io_TEP();
 
     void handle_reactor_msg(const ReactorMsg&);
+    void attend_clients();
 
     LogService* m_log;
     cpp11::atomic_bool m_is_stopping;
@@ -68,8 +68,7 @@ class Reactor
     mutable struct
     {
         std::vector<ReactorClient*> ptrs;
-        cpp11::condition_variable ptrs_empty;
-        cpp11::mutex lock;
+//        cpp11::mutex lock;
     } m_clients;
 
     ReactorNotifQ * m_notifq;
