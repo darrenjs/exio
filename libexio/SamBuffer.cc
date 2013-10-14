@@ -230,8 +230,11 @@ void DynamicSamBuffer::encode_header()
 
   char lenbuf[RESERVE_FOR_SAM_HEADER];
   memset(lenbuf, 0, sizeof(lenbuf));
+#ifdef __LP64__
   snprintf(lenbuf, sizeof(lenbuf)-1, "%lu", msglen_full);
-
+#else
+  snprintf(lenbuf, sizeof(lenbuf)-1, "%u", msglen_full);
+#endif
   memcpy(p, lenbuf, msglen_strlen);
 
   // TODO: some sanity checks
