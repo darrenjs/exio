@@ -122,6 +122,7 @@ ReactorClient::ReactorClient(Reactor* r, int fd)
   : m_reactor(r),
     m_fd(fd),
     m_io_closed(false),
+    m_io_shutdown(false),
     m_bytes_out(0),
     m_bytes_in(0),
     m_last_write(time(NULL)),
@@ -392,7 +393,7 @@ int Client::handle_input()  /* REACTOR THREAD */
   xlog_write("Client::handle_input", __FILE__, __LINE__);
   /* called by the reactor thread */
 
-  if ( !iovalid() ) return 0;
+  if ( !this->io_open() ) return 0;
 
   // TODO: here, we should check how much memory is pending? Either add that
   // in, or, move to using a synchronized read/write buffer.
@@ -465,7 +466,7 @@ int Client::events()  /* REACTOR THREAD */
 {
   int events = 0;
 
-  if (not m_io_closed)
+  if ( io_open() )
   {
     events = POLLIN;
     {
@@ -637,7 +638,7 @@ void Client::handle_close()   /* REACTOR THREAD */
 {
   /* this is the controlled-shutdown-sequence */
 
-  if (not m_io_closed)
+  if ( io_open() )
   {
     _DEBUG_(m_logsvc, "close(fd" << fd() <<")");
 
@@ -651,6 +652,19 @@ void Client::handle_close()   /* REACTOR THREAD */
     request_task_thread_stop();
   }
 }
+//----------------------------------------------------------------------
+void Client::handle_shutdown()   /* REACTOR THREAD */
+{
+  /* point of this function is to protect shutdown from being called multiple
+   * times for a single socket.
+   */
+  if (not m_io_shutdown and not m_io_closed)
+  {
+    m_io_shutdown = true;
+    ::shutdown(fd(), SHUT_WR);
+  }
+}
+//
 //----------------------------------------------------------------------
 void Client::request_task_thread_stop()
 {

@@ -420,7 +420,7 @@ void Reactor::reactor_main_loop()
               (revents bitand POLLHUP) or
               (revents bitand POLLNVAL)) and !readagain)
         {
-          xlog_write("ptr->handle_close()", __FILE__, __LINE__);
+          xlog_write("poll detected file close, calling ptr->handle_close()", __FILE__, __LINE__);
           ptr->handle_close();
         }
       }
@@ -631,10 +631,8 @@ void Reactor::attend_clients()
     {
       if (client->io_open())
       {
-        // TODO: this must be moved into the client, and, protected, so that
-        // shutdown cannot be called more than once.
         xlog_write("attend_clients -> Shutdown", __FILE__, __LINE__);
-        ::shutdown(client->fd(), SHUT_WR);
+        client->handle_shutdown();
       }
     }
     if (attn_flags bitand ReactorClient::eWantClose)

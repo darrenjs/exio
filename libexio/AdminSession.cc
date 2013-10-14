@@ -420,7 +420,7 @@ bool AdminSession::safe_to_delete() const
 {
   /* we only consider safe to delete once the io has been closed */
   return (m_session_valid==false and
-          ((m_io_handle and m_io_handle->iovalid() == false) or (m_io_handle==NULL))
+          ((m_io_handle and m_io_handle->io_open() == false) or (m_io_handle==NULL))
     );
 }
 
@@ -429,7 +429,7 @@ void AdminSession::housekeeping()
 {
   if ((m_hb_intvl==0) or
       (m_io_handle==NULL) or
-      (not m_io_handle->iovalid())) return;
+      (not m_io_handle->io_open())) return;
 
   time_t now = time(NULL);
 

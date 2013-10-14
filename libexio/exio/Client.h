@@ -29,6 +29,7 @@ class ReactorClient
     virtual int  handle_input() = 0;
     virtual void handle_output() = 0;
     virtual void handle_close() = 0;
+    virtual void handle_shutdown() = 0;
     virtual int  events() = 0;
 
     int      fd()       const { return m_fd; }
@@ -65,6 +66,8 @@ class ReactorClient
 
   protected:
     cpp11::atomic_bool m_io_closed;
+    cpp11::atomic_bool m_io_shutdown;
+
     size_t   m_bytes_out;
     size_t   m_bytes_in;
     time_t   m_last_write;
@@ -108,13 +111,8 @@ class Client : public ReactorClient
     /* Queue data to send  / close socket */
     int queue(const char*, size_t, bool request_close = false);
 
-    /* Has peer socket been closed? */
-    bool iovalid() const { return !m_io_closed; }  // TODO: remove, dupllicate
-
-
     int       task_lwp() const { return m_task_lwp; }
     pthread_t task_tid() const { return m_task_tid; }
-
 
     size_t pending_out() const;
 
@@ -140,6 +138,7 @@ class Client : public ReactorClient
     int handle_input();
     void handle_output();
     void handle_close();
+    void handle_shutdown();
     int  events();
 
     void shutdown_outq();
