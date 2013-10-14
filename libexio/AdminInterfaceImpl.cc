@@ -117,10 +117,10 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           &AdminInterfaceImpl::admincmd_diags, this,
                           adminattrs) );
 
-  admin_add( AdminCommand("table_subs",
-                          "list subscribers for each table", "",
-                          &AdminInterfaceImpl::admincmd_table_subs, this,
-                          adminattrs) );
+  // admin_add( AdminCommand("table_subs",
+  //                         "list subscribers for each table", "",
+  //                         &AdminInterfaceImpl::admincmd_table_subs, this,
+  //                         adminattrs) );
 
   admin_add( AdminCommand("drop_session",
                           "force a session disconnect", "",
@@ -487,8 +487,9 @@ void AdminInterfaceImpl::helper_session_descr(std::ostream& os,
 {
   os << "session " << session.id()
      << " (service-id '" << session.peer_serviceid() << "', "
-     << "peer '" << session.peeraddr() << "', "
-     << "username '" << user << "')";
+     << "username '" << user << "', "
+     << "peer " << session.peeraddr() << ", "
+     << "fd " << session.fd() << ")";
 }
 
 //----------------------------------------------------------------------
@@ -782,10 +783,10 @@ void AdminInterfaceImpl::createNewSession(int fd)
          << ", fd " << fd
          << ", created session " << session->id());
 
-  std::ostringstream os;
-  os << "IO threads for session " << session->id() << ": ";
-  session->log_thread_ids(os);
-  _INFO_(m_appsvc.log(),  os.str() );
+  // std::ostringstream os;
+  // os << "IO threads for session " << session->id() << ": ";
+  // session->log_thread_ids(os);
+  // _INFO_(m_appsvc.log(),  os.str() );
 
   // Send a logon message to the new connection. Note that this is an
   // unconditional event, ie we don't have to wait for thje client to send a
