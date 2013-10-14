@@ -48,6 +48,11 @@
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
 
+extern "C"
+{
+  #include <xlog/xlog.h>
+}
+
 struct ProgramOptions
 {
     std::string addr;
@@ -107,6 +112,7 @@ AdminListener::AdminListener()
 //----------------------------------------------------------------------
 void AdminListener::trigger_close(int retval)
 {
+  xlog_write("trigger_close", __FILE__, __LINE__);
   cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
   m_session_open = false;
   m_retval = retval;
@@ -264,6 +270,7 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
   }
   else
   {
+//    TODO: instead of this, output an ERROR, which will be found via the -d option
     std::cout << "NO FORMAT" << std::endl;
   }
   // {
@@ -287,6 +294,7 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
 
   if ( not exio::has_pending(msg) )
   {
+    xlog_write("calling trigger_close", __FILE__, __LINE__);
     trigger_close(retval);
     return;
   }
@@ -352,8 +360,11 @@ void AdminListener::session_closed(exio::AdminSession& /*session*/)
 //----------------------------------------------------------------------
 int AdminListener::wait_for_session_closure()
 {
+
+  xlog_write("AdminListener::wait_for_session_closure", __FILE__, __LINE__);
   cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
   while ( m_session_open ) { m_convar.wait(lock); }
+  xlog_write("wait_for_session_closure  ===> wait complete", __FILE__, __LINE__);
 
   return m_retval;
 }
@@ -809,12 +820,19 @@ int __main(const int argc, char** argv)
 
   int retval = 0;
   retval = listener.wait_for_session_closure();
+  xlog_write("out of wait", __FILE__, __LINE__);
   return retval;
 }
 
 //----------------------------------------------------------------------
 int main(const int argc, char** argv)
 {
+  xlog_config cfg;
+  memset(&cfg, 0, sizeof(xlog_config));
+  cfg.num_counters = 10;
+  cfg.num_rows = 10000;
+  xlog_init(NULL, cfg);
+
   int retval = 125;
   try
   {
