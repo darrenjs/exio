@@ -80,9 +80,9 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
   // TODO: to these admins ever get deleted?
 
   /* Register some admin capabilities of an admin interface */
-  admin_add( AdminCommand("tables",
-                          "query tables",
-                          "tables [list|show]",
+  admin_add( AdminCommand("table",
+                          "query table information",
+                          "table [list|show] [tablename]",
                           &AdminInterfaceImpl::admincmd_list_tables, this,
                           adminattrs) );
 
