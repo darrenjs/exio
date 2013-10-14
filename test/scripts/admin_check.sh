@@ -16,6 +16,9 @@ N=0
 while true;
 do
     echo Run $N
+
+    export XLOG_FILENAME="/tmp/xlog.admin.${N}.dat"
+
     adminlog=${admin_report_dir}/admin.log.${N}
 
     $admincmd -d -d -d -d $server_addr $server_port diags  >  ${adminlog}
@@ -34,19 +37,24 @@ do
     else
         echo problem with run ${N}
         cp   ${adminlog}  ${adminlog}.problem
+        cp   ${XLOG_FILENAME} ${XLOG_FILENAME}.problem
+        mv   ${XLOG_FILENAME}.problem .
         break;
     fi
 
     if [ -e core ];
     then
         echo core dump, run ${N}
-        mv   core core.run${N}
+        mv   core core.run.${N}
         cp  ${adminlog}  ${adminlog}.coredump
+        cp   ${XLOG_FILENAME} ${XLOG_FILENAME}.coredump
+        mv  ${XLOG_FILENAME}.coredump .
         break;
     fi
 
     # under normal conditions, we remove the log
     rm -f ${adminlog}
+    rm -f ${XLOG_FILENAME}
     N=`expr $N + 1`
 
 done
