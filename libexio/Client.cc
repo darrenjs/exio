@@ -400,7 +400,14 @@ int Client::handle_input()  /* REACTOR THREAD */
   DataChunk chunk;
 
   ssize_t const n = read(fd(), chunk.buf, EXIO_CLIENT_CHUNK_SIZE);
+
   int const _err = errno;
+
+  void * rowptr = xlog_write("read(), n=", __FILE__, __LINE__);
+  xlog_append_sint(rowptr, n);
+  xlog_append_str(rowptr, ", err=", 6);
+  xlog_append_sint(rowptr, _err);
+
 
   if (m_log_io_events)
   {
@@ -524,11 +531,6 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
   if (invalidate_reactor) reactor()->invalidate();
 
   return 0; // success
-}
-//----------------------------------------------------------------------
-void Client::close()
-{
-  queue(NULL, 0, true);
 }
 //----------------------------------------------------------------------
 size_t Client::pending_out() const

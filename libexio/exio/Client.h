@@ -105,9 +105,8 @@ class Client : public ReactorClient
 
     void release();
 
-    /* Queue data to send */
+    /* Queue data to send  / close socket */
     int queue(const char*, size_t, bool request_close = false);
-    void close();
 
     /* Has peer socket been closed? */
     bool iovalid() const { return !m_io_closed; }  // TODO: remove, dupllicate

@@ -335,7 +335,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 void AdminSession::close()
 {
-  if (m_io_handle) m_io_handle->close();
+  if (m_io_handle) m_io_handle->queue(0,0,true);
 }
 
 //----------------------------------------------------------------------
