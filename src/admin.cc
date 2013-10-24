@@ -48,10 +48,6 @@
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
 
-extern "C"
-{
-  #include <xlog/xlog.h>
-}
 
 struct ProgramOptions
 {
@@ -68,6 +64,35 @@ struct ProgramOptions
     }
 } program_options;
 
+
+//----------------------------------------------------------------------
+/* Ensure a heap allocated AdminSession is properly disposed */
+class AdminSessionGuard
+{
+  public:
+    AdminSessionGuard(exio::AdminSession*);
+    ~AdminSessionGuard();
+
+    void reset() { m_p = 0; }
+    exio::AdminSession* ptr() {return m_p;}
+
+  private:
+    AdminSessionGuard(const AdminSessionGuard&); // prohibited
+    AdminSessionGuard& operator=(const AdminSessionGuard&); // prohibited
+    exio::AdminSession* m_p;
+};
+
+AdminSessionGuard::AdminSessionGuard(exio::AdminSession*p)
+  : m_p(p)
+{
+}
+
+AdminSessionGuard::~AdminSessionGuard()
+{
+  if (m_p) m_p->close();
+  delete m_p;
+}
+//----------------------------------------------------------------------
 
 class AdminListener : public exio::AdminSession::Listener
 {
@@ -112,7 +137,6 @@ AdminListener::AdminListener()
 //----------------------------------------------------------------------
 void AdminListener::trigger_close(int retval)
 {
-  xlog_write("trigger_close", __FILE__, __LINE__);
   cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
   m_session_open = false;
   m_retval = retval;
@@ -294,7 +318,6 @@ void AdminListener::handle_reponse(const sam::txMessage& msg,
 
   if ( not exio::has_pending(msg) )
   {
-    xlog_write("calling trigger_close", __FILE__, __LINE__);
     trigger_close(retval);
     return;
   }
@@ -361,10 +384,8 @@ void AdminListener::session_closed(exio::AdminSession& /*session*/)
 int AdminListener::wait_for_session_closure()
 {
 
-  xlog_write("AdminListener::wait_for_session_closure", __FILE__, __LINE__);
   cpp11::unique_lock<cpp11::mutex> lock( m_mutex );
   while ( m_session_open ) { m_convar.wait(lock); }
-  xlog_write("wait_for_session_closure  ===> wait complete", __FILE__, __LINE__);
 
   return m_retval;
 }
@@ -752,8 +773,8 @@ int __main(const int argc, char** argv)
 
   if (program_options.cmd.empty()) listener.show_unsol_messages(true);
 
-  exio::AdminSession adminsession(appsvc, fd, &listener, 1);
-  exio::AdminSession* sptr = &adminsession;
+  exio::AdminSession* sptr = new exio::AdminSession(appsvc, fd, &listener, 1);
+  AdminSessionGuard admin_session_guard(sptr);
 
   //exio::AdminSession* sptr = new exio::AdminSession(appsvc, fd, &listener, 1);
 
@@ -820,19 +841,19 @@ int __main(const int argc, char** argv)
 
   int retval = 0;
   retval = listener.wait_for_session_closure();
-  xlog_write("out of wait", __FILE__, __LINE__);
+
+
+  sptr->close();
+
+  admin_session_guard.reset();
+  delete sptr;
+
   return retval;
 }
 
 //----------------------------------------------------------------------
 int main(const int argc, char** argv)
 {
-  xlog_config cfg;
-  memset(&cfg, 0, sizeof(xlog_config));
-  cfg.num_counters = 10;
-  cfg.num_rows = 10000;
-  xlog_init(NULL, cfg);
-
   int retval = 125;
   try
   {
