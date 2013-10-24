@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-server_addr=127.0.0.1
+server_addr=hp
+#server_addr=127.0.0.1
 server_port=33311
 
 admincmd="./admin"
@@ -36,7 +37,8 @@ do
         fi
     else
         echo problem with run ${N}
-        cp   ${adminlog}  ${adminlog}.problem
+        cp  ${adminlog}  ${adminlog}.problem
+        mv  ${adminlog}.problem .
         cp   ${XLOG_FILENAME} ${XLOG_FILENAME}.problem
         mv   ${XLOG_FILENAME}.problem .
         break;
@@ -47,7 +49,8 @@ do
         echo core dump, run ${N}
         mv   core core.run.${N}
         cp  ${adminlog}  ${adminlog}.coredump
-        cp   ${XLOG_FILENAME} ${XLOG_FILENAME}.coredump
+        mv  ${adminlog}.coredump .
+        cp  ${XLOG_FILENAME} ${XLOG_FILENAME}.coredump
         mv  ${XLOG_FILENAME}.coredump .
         break;
     fi
