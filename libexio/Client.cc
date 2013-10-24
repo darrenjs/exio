@@ -3,7 +3,6 @@
 #include "exio/Logger.h"
 #include "exio/AppSvc.h"
 #include "exio/Reactor.h"
-#include "exio/ReactorReadBuffer.h"
 
 extern "C"
 {
@@ -118,20 +117,93 @@ struct RawMsg
 
 
 
+//----------------------------------------------------------------------
 ReactorClient::ReactorClient(Reactor* r, int fd)
   : m_reactor(r),
     m_fd(fd),
     m_io_closed(false),
-    m_io_shutdown(false),
     m_bytes_out(0),
     m_bytes_in(0),
     m_last_write(time(NULL)),
     m_last_read(m_last_write),
-    m_attn_flags(0)
+    m_attn_flags(0),
+    m_tdestroy(0),
+    m_runstate('N')
 {}
 
 
+//----------------------------------------------------------------------
+int ReactorClient::attn_flag() const
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
+  return m_attn_flags;
+}
 
+//----------------------------------------------------------------------
+void ReactorClient::set_run_state()
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_runstate_mutex );
+  m_runstate = 'R';
+}
+//----------------------------------------------------------------------
+char ReactorClient::get_run_state()
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_runstate_mutex );
+  return m_runstate;
+}
+//----------------------------------------------------------------------
+void ReactorClient::update_run_state_for_reactor(char& oldstate, char& newstate)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_runstate_mutex );
+
+  oldstate = m_runstate;
+
+  if (has_work() and m_runstate=='N')
+  {
+    m_runstate='Q';
+  }
+
+  newstate = m_runstate;
+}
+//----------------------------------------------------------------------
+void ReactorClient::update_run_state_for_worker(char& oldstate, char& newstate)
+{
+  cpp11::lock_guard<cpp11::mutex> guard( m_runstate_mutex );
+
+  oldstate = m_runstate;
+
+  if (has_work() == false)
+  {
+    m_runstate='N';
+  }
+
+  newstate = m_runstate;
+}
+//----------------------------------------------------------------------
+int ReactorClient::destroy_cycle(time_t t)
+{
+  // NOTE: need to keep the death-wait interval low, because each thread will
+  // be consuming 8MB or 10MB of memory, so we can't wait around too long to
+  // perform the cleanup.
+  if ( (t>m_tdestroy and ((t-m_tdestroy)>=1)) or t<m_tdestroy)
+  {
+    m_tdestroy = t;
+
+    if (not m_io_closed)
+    {
+
+      handle_close();
+    }
+    else
+    {
+      xlog_write1("ReactorClient::destroy_cycle --- READY TO DELETE!", __FILE__, __LINE__);
+      return 1;  // ready to delete
+    }
+  }
+
+  return 0;
+}
+//----------------------------------------------------------------------
 
   Client::DataFifo::DataFifo()
     : itemcount(0),
@@ -156,22 +228,22 @@ Client::Client(Reactor* reactor,
   : ReactorClient(reactor, fd),
     m_logsvc(log),
     m_log_io_events(true),
-    m_task_thread(NULL),
-    m_task_tid(0),
-    m_task_lwp(0),
     m_cb(cb),
-    m_out_pend_max(20*1024*1024) // TODO: take from config
+    m_out_pend_max(20*1024*1024), // TODO: take from config
+    m_buf(4096)
 {
 
   // Danger: creation of internal thread should be last action of constructor,
   // so that object construction is complete before accessed by thread.
-  m_task_thread = new cpp11::thread(&Client::task_thread_TEP, this);
+  xlog_incr(0);
+  xlog_cntr_label(0, "Client");
 }
 
 //----------------------------------------------------------------------
 /* Destructor */
 Client::~Client()   /* REACTOR THREAD */
 {
+  xlog_write1("Client::~Client", __FILE__, __LINE__);
   // TODO: we have a design problem here: what if self object is destructed on
   // the TASK thread!  This suggests a new design.
 
@@ -193,16 +265,12 @@ Client::~Client()   /* REACTOR THREAD */
     }
   }
 
-  /* stop the internal thread */
-  request_task_thread_stop();
-  m_task_thread -> join();
-  delete m_task_thread;
-
   /* clear up any memory */
   shutdown_outq();
   m_datafifo.items.clear();
 
-//  xlog_write("Client::~Client", __FILE__, __LINE__);
+  xlog_incr(1);
+  xlog_cntr_label(1, "~Client");
 }
 //----------------------------------------------------------------------
 void Client::shutdown_outq()
@@ -220,180 +288,144 @@ void Client::shutdown_outq()
   m_out_q.itemcount= 0;
   m_out_q.pending = 0;
 }
+
 //----------------------------------------------------------------------
-void Client::task_thread_TEP()
-{
-  m_task_tid = pthread_self();
-  m_task_lwp = syscall(SYS_gettid);
+// int Client::process_inbound_bytes(ReactorReadBuffer&buf)
+// {
+//   bool should_exit = false;
+//   do
+//   {
+//     {
+//       /* Note the requirement for unique_lock here.  This is the type expected
+//          by the condition variable wait() method, because the condition
+//          variable will need to release and acquire the lock as wait() is
+//          entered and exited.
+//        */
+//       cpp11::unique_lock<cpp11::mutex> lock( m_datafifo.mutex );
 
-//  xlog_write("task_thread_TEP", __FILE__, __LINE__);
+//       /* Loop/condition predicate here is a separate boolean flag.  Initially
+//        * the predicate was simply a call to -- m_q.items.empty() -- however,
+//        * strangely, that did not always work. There was some race-condition,
+//        * which was fairly well repeatable. It seems that somehow, when using
+//        * empty(), it was possible to add an item to the queue and for empty()
+//        * to still be true, and this even when the call to push(), and the call
+//        * to empty(), were pretected with mutexes.  Replaced the empty() with
+//        * size()!=0 fixed the problem.  Because I didn't understand why empty()
+//        * failed and size() worked, here I've gone for additional robustness,
+//        * but using an boolean approach.
+//        *
+//        * NOTE: comment came from a problem found in AdminIO.cc code.
+//        */
+//       while (m_datafifo.itemcount == 0)
+//       {
+//         m_datafifo.cond.wait( lock );
+//       }
 
-  // This is long lived; must not be destructed, because that would cause
-  // pending bytes to be lost.  Normally would put this input the
-  // process_inbound_bytes() method, however that is able to exit.
-  ReactorReadBuffer buf(4096);
-  bool should_exit = false;
-  while (!should_exit)
-  {
-    try
-    {
-      if (process_inbound_bytes(buf)) should_exit = true;
-    }
-    catch(const std::exception& e)
-    {
-      _WARN_(m_logsvc, "exception processing socket data: " <<e.what());
-    }
-    catch(...)
-    {
-      _WARN_(m_logsvc, "exception processing socket data: unknown" );
-    }
-  }
 
-  {
-    cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
-    if (m_cb) m_cb->process_close(this);
-  }
 
-  shutdown_outq();
-}
+// /*
+
+// hmmm .... might have STL::list problem here again
+
+// #0  0x00007f4ba4e2b6c2 in std::_List_const_iterator<exio::Client::DataChunk>::operator++ (this=0x7f4ba356d9b0) at /usr/include/c++/4.7/bits/stl_list.h:236
+// #1  0x00007f4ba4e2b38d in std::__distance<std::_List_const_iterator<exio::Client::DataChunk> > (__first=..., __last=...) at /usr/include/c++/4.7/bits/stl_iterator_base_funcs.h:82
+// #2  0x00007f4ba4e2aecc in std::distance<std::_List_const_iterator<exio::Client::DataChunk> > (__first=..., __last=...) at /usr/include/c++/4.7/bits/stl_iterator_base_funcs.h:118
+// #3  0x00007f4ba4e2a999 in std::list<exio::Client::DataChunk, std::allocator<exio::Client::DataChunk> >::size (this=0x171c418) at /usr/include/c++/4.7/bits/stl_list.h:855
+
+
+// TODO: hmmm .... maybe instead, change the logic ... use a swap to extract all
+// of the data quickly, and then use an iterator..  Should be better that
+// modifying the list all the time.
+// */
+//       // copy all pending data into our inbound-buffer
+
+//       while (m_datafifo.itemcount)
+//       {
+//         DataChunk& front = m_datafifo.items.front();
+
+//         if (front.size == 0) // got sentinel object
+//         {
+//           // don't process any more pending inbound chunks after receiving the
+//           // sentinel object (however, for data already in the inbound-buffer,
+//           // we need to pass that back to the client).
+//           should_exit = true;
+//           break;
+//         }
+//         else
+//         {
+//           while (buf.space_remain() < front.size)
+//           {
+//             // TODO: need to handle throw on growth error
+//             _DEBUG_(m_logsvc, "client: growing buffer, currently at " << buf.capacity());
+//             buf.grow(); // throws on failure
+//           }
+
+//           // The cancopy amount is just front.size(). We can sure of this due
+//           // to the preceeding growth. Ie, we don't need to compare it to the
+//           // space remaining in the buffer.
+//           size_t cancopy = front.size;
+//           if (cancopy)
+//           {
+//             // good, readbuffer can accept more data
+//             memcpy(buf.wp(), &(front.buf[front.start]), cancopy);
+//             buf.incr_bytesavail( cancopy );
+
+//             front.size  -= cancopy;
+//             front.start += cancopy;
+//           }
+//         }
+
+//         m_datafifo.itemcount--;
+//         m_datafifo.items.pop_front();  // no need to check if front has been used up
+//       }
+
+//     } //   -*-*-*-*- end of IO lock -*-*-*-*
+
+
+//     // We have released the lock, which will allow the IO thread to
+//     // proceed. Now pass our bytes to the derived method.
+//     while ( buf.bytesavail() )
+//     {
+//       // TODO: what happens if an exception is thrown?
+//       size_t consumed = 0;
+
+//       {
+//         cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+//         if (m_cb)
+//         {
+//           try
+//           {
+//             consumed = m_cb->process_input(this, buf.rp(), buf.bytesavail());
+//           }
+//           catch (...)
+//           {
+
+//             // TODO: what should we do here?
+//             std::string leading(buf.rp(), 20);
+//             _WARN_(m_logsvc, "*** EXCEPTION: [" << leading << "]");
+
+//           }
+//         }
+//       }
+
+//       if (consumed>0)
+//         buf.consume( consumed );
+//       else
+//         break;
+//     }
+
+//     buf.shift_pending_to_array_start();
+
+//   } while (should_exit == false);
+
+//   return 1;  // return >0 to imply thread exit
+// }
 //----------------------------------------------------------------------
-int Client::process_inbound_bytes(ReactorReadBuffer&buf)
+ReactorClient::IOState Client::handle_input()  /* REACTOR THREAD */
 {
-  bool should_exit = false;
-  do
-  {
-    {
-      /* Note the requirement for unique_lock here.  This is the type expected
-         by the condition variable wait() method, because the condition
-         variable will need to release and acquire the lock as wait() is
-         entered and exited.
-       */
-      cpp11::unique_lock<cpp11::mutex> lock( m_datafifo.mutex );
-
-      /* Loop/condition predicate here is a separate boolean flag.  Initially
-       * the predicate was simply a call to -- m_q.items.empty() -- however,
-       * strangely, that did not always work. There was some race-condition,
-       * which was fairly well repeatable. It seems that somehow, when using
-       * empty(), it was possible to add an item to the queue and for empty()
-       * to still be true, and this even when the call to push(), and the call
-       * to empty(), were pretected with mutexes.  Replaced the empty() with
-       * size()!=0 fixed the problem.  Because I didn't understand why empty()
-       * failed and size() worked, here I've gone for additional robustness,
-       * but using an boolean approach.
-       *
-       * NOTE: comment came from a problem found in AdminIO.cc code.
-       */
-      while (m_datafifo.itemcount == 0)
-      {
-        m_datafifo.cond.wait( lock );
-      }
-
-
-
-/*
-
-hmmm .... might have STL::list problem here again
-
-#0  0x00007f4ba4e2b6c2 in std::_List_const_iterator<exio::Client::DataChunk>::operator++ (this=0x7f4ba356d9b0) at /usr/include/c++/4.7/bits/stl_list.h:236
-#1  0x00007f4ba4e2b38d in std::__distance<std::_List_const_iterator<exio::Client::DataChunk> > (__first=..., __last=...) at /usr/include/c++/4.7/bits/stl_iterator_base_funcs.h:82
-#2  0x00007f4ba4e2aecc in std::distance<std::_List_const_iterator<exio::Client::DataChunk> > (__first=..., __last=...) at /usr/include/c++/4.7/bits/stl_iterator_base_funcs.h:118
-#3  0x00007f4ba4e2a999 in std::list<exio::Client::DataChunk, std::allocator<exio::Client::DataChunk> >::size (this=0x171c418) at /usr/include/c++/4.7/bits/stl_list.h:855
-
-
-TODO: hmmm .... maybe instead, change the logic ... use a swap to extract all
-of the data quickly, and then use an iterator..  Should be better that
-modifying the list all the time.
-*/
-      // copy all pending data into our inbound-buffer
-
-      while (m_datafifo.itemcount)
-      {
-        DataChunk& front = m_datafifo.items.front();
-
-        if (front.size == 0) // got sentinel object
-        {
-          // don't process any more pending inbound chunks after receiving the
-          // sentinel object (however, for data already in the inbound-buffer,
-          // we need to pass that back to the client).
-          should_exit = true;
-          break;
-        }
-        else
-        {
-          while (buf.space_remain() < front.size)
-          {
-            // TODO: need to handle throw on growth error
-            _DEBUG_(m_logsvc, "client: growing buffer, currently at " << buf.capacity());
-            buf.grow(); // throws on failure
-          }
-
-          // The cancopy amount is just front.size(). We can sure of this due
-          // to the preceeding growth. Ie, we don't need to compare it to the
-          // space remaining in the buffer.
-          size_t cancopy = front.size;
-          if (cancopy)
-          {
-            // good, readbuffer can accept more data
-            memcpy(buf.wp(), &(front.buf[front.start]), cancopy);
-            buf.incr_bytesavail( cancopy );
-
-            front.size  -= cancopy;
-            front.start += cancopy;
-          }
-        }
-
-        m_datafifo.itemcount--;
-        m_datafifo.items.pop_front();  // no need to check if front has been used up
-      }
-
-    } //   -*-*-*-*- end of IO lock -*-*-*-*
-
-
-    // We have released the lock, which will allow the IO thread to
-    // proceed. Now pass our bytes to the derived method.
-    while ( buf.bytesavail() )
-    {
-      // TODO: what happens if an exception is thrown?
-      size_t consumed = 0;
-
-      {
-        cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
-        if (m_cb)
-        {
-          try
-          {
-            consumed = m_cb->process_input(this, buf.rp(), buf.bytesavail());
-          }
-          catch (...)
-          {
-
-            // TODO: what should we do here?
-            std::string leading(buf.rp(), 20);
-            _WARN_(m_logsvc, "*** EXCEPTION: [" << leading << "]");
-
-          }
-        }
-      }
-
-      if (consumed>0)
-        buf.consume( consumed );
-      else
-        break;
-    }
-
-    buf.shift_pending_to_array_start();
-
-  } while (should_exit == false);
-
-  return 1;  // return >0 to imply thread exit
-}
-//----------------------------------------------------------------------
-int Client::handle_input()  /* REACTOR THREAD */
-{
-  xlog_write("Client::handle_input", __FILE__, __LINE__);
   /* called by the reactor thread */
 
-  if ( !this->io_open() ) return 0;
+  if ( !this->io_open() ) return ReactorClient::IO_default;
 
   // TODO: here, we should check how much memory is pending? Either add that
   // in, or, move to using a synchronized read/write buffer.
@@ -404,10 +436,10 @@ int Client::handle_input()  /* REACTOR THREAD */
 
   int const _err = errno;
 
-  void * rowptr = xlog_write("read(), n=", __FILE__, __LINE__);
-  xlog_append_sint(rowptr, n);
-  xlog_append_str(rowptr, ", err=", 6);
-  xlog_append_sint(rowptr, _err);
+  // void * rowptr = xlog_write1("read(), n=", __FILE__, __LINE__);
+  //xlog_append_sint(rowptr, n);
+  //xlog_append_str(rowptr, ", err=", 6);
+  //xlog_append_sint(rowptr, _err);
 
 
   if (m_log_io_events)
@@ -430,22 +462,19 @@ int Client::handle_input()  /* REACTOR THREAD */
     _DEBUG_(m_logsvc, "eof when reading fd " << fd());
 
     // request a controlled shutdown
-    m_attn_flags = m_attn_flags bitor eWantClose;
-    if (reactor()) reactor()->request_attn();
+    return ReactorClient::IO_close;
   }
   else if (n < 0)
   {
     _INFO_(m_logsvc, "socket read failed: " << utils::strerror(_err) );
 
     // request a controlled shutdown
-    m_attn_flags = m_attn_flags bitor eWantClose;
-    if (reactor()) reactor()->request_attn();
+    return ReactorClient::IO_close;
   }
   else if (n > 0 )
   {
     m_bytes_in += n;
     m_last_read = time(NULL);
-
 
     // if we have reached here, then we have successfully read new bytes from
     // the socket, and placed them into the read buffer
@@ -459,7 +488,8 @@ int Client::handle_input()  /* REACTOR THREAD */
   }
 
   // return whether another read might be needed
-  return (n>0 and n == EXIO_CLIENT_CHUNK_SIZE);
+  return (n>0 and n == EXIO_CLIENT_CHUNK_SIZE)?
+    ReactorClient::IO_read_again : ReactorClient::IO_default;
 }
 //----------------------------------------------------------------------
 int Client::events()  /* REACTOR THREAD */
@@ -485,12 +515,17 @@ int Client::events()  /* REACTOR THREAD */
 //----------------------------------------------------------------------
 int Client::queue(const char* buf, size_t size, bool closesocket)
 {
+  xlog_write1("queue", __FILE__, __LINE__);
   bool invalidate_reactor = false;
 
   {
     cpp11::lock_guard<cpp11::mutex> guard( m_out_q.mutex );
 
-    if (m_out_q.acceptmore == false) return -2;
+    if (m_out_q.acceptmore == false)
+    {
+      xlog_write1("cannot add more to queue", __FILE__, __LINE__);
+      return -2;
+    }
 
     if (buf and size)
     {
@@ -499,11 +534,17 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
         _ERROR_(m_logsvc, "client fd " << fd() << " reached max queue size");;
 
         // note, since the outbound socket has probably been flow controlled,
-        // we cannot request socket shutdown via the sentinel-object, so
-        // instead, just request the reactor to terminate us from here.
+        // we cannot request socket shutdown via the sentinel-object (because
+        // the handle_output might not get called again), so instead, just
+        // request the reactor to terminate us from here.
         m_out_q.acceptmore = false;
-        m_attn_flags = m_attn_flags bitor eWantShutdown;
-        if (reactor()) reactor()->request_attn();
+        {
+          cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
+
+          // TODO: also, consider calling the shutdown from here too
+          m_attn_flags = m_attn_flags bitor eWantShutdown;
+          if (reactor()) reactor()->request_attn();
+        }
         return -1;
       }
       else
@@ -540,7 +581,7 @@ size_t Client::pending_out() const
   return m_out_q.pending;
 }
 //----------------------------------------------------------------------
-void Client::handle_output() /* REACTOR THREAD */
+ReactorClient::IOState Client::handle_output() /* REACTOR THREAD */
 {
   /* we can now write bytes to the socket, without blocking  */
   while (true)
@@ -558,7 +599,7 @@ void Client::handle_output() /* REACTOR THREAD */
       else
       {
         m_out_q.itemcount = 0;
-        return;
+        return ReactorClient::IO_default;
       }
 
       // handle close-io sentinel object
@@ -568,11 +609,11 @@ void Client::handle_output() /* REACTOR THREAD */
         m_out_q.items.erase( m_out_q.items.begin() );
         m_out_q.itemcount--;
 
-        m_attn_flags = m_attn_flags bitor eWantShutdown;  // request controlled shutdown
-        if (reactor()) reactor()->request_attn();
-        return;
+         // request controlled shutdown
+        return ReactorClient::IO_close;
       }
     }
+
     /* Note: now using send() instead of write(), so that we can prevent
      * SIGPIPE from being raised */
     const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
@@ -596,7 +637,7 @@ void Client::handle_output() /* REACTOR THREAD */
     {
       if (_err == EAGAIN or _err == EWOULDBLOCK)
       {
-        return;
+        return ReactorClient::IO_default;
       }
       else
       {
@@ -605,9 +646,7 @@ void Client::handle_output() /* REACTOR THREAD */
                << utils::strerror(_err) );
 
         // request controlled shutdown
-        m_attn_flags = m_attn_flags bitor eWantClose;
-        if (reactor()) reactor()->request_attn();
-        return;
+        return ReactorClient::IO_close;
       }
     }
     else
@@ -629,7 +668,7 @@ void Client::handle_output() /* REACTOR THREAD */
       }
     }
 
-    // S.tay in the while loop, to send all queued data. If we were to return
+    // Stay in the while loop, to send all queued data. If we were to return
     // too early, then too much time is spend in the reactor entering into the poll.
   }
 }
@@ -644,12 +683,21 @@ void Client::handle_close()   /* REACTOR THREAD */
 
     // Note: important that we only make one call to close.
     m_io_closed = true;
-    xlog_write("::close(fd())", __FILE__, __LINE__);
+    xlog_write1("::close(fd())", __FILE__, __LINE__);
     ::close(fd());
 
     // request stop of the task thread (which invokes the derived-class
     // callback to notify of closure).
-    request_task_thread_stop();
+    //request_task_thread_stop();
+
+    // TODO: need to get the attention of a worker thread. Lets try by pushing
+    // data onto the fifo; then the reactor should see that we have work to
+    // do.
+    {
+      cpp11::lock_guard<cpp11::mutex> guard( m_datafifo.mutex );
+      m_datafifo.items.push_back( DataChunk() );
+      m_datafifo.itemcount++;
+    }
   }
 }
 //----------------------------------------------------------------------
@@ -658,30 +706,31 @@ void Client::handle_shutdown()   /* REACTOR THREAD */
   /* point of this function is to protect shutdown from being called multiple
    * times for a single socket.
    */
-  if (not m_io_shutdown and not m_io_closed)
+  if (not m_io_closed)
   {
-    m_io_shutdown = true;
+    {
+      cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
+      if (m_attn_flags bitand eShutdownDone) return;
+      m_attn_flags or_eq eShutdownDone;
+    }
+
     ::shutdown(fd(), SHUT_WR);
   }
-}
-//
-//----------------------------------------------------------------------
-void Client::request_task_thread_stop()
-{
-  cpp11::lock_guard<cpp11::mutex> guard( m_datafifo.mutex );
-
-  m_datafifo.items.push_back( DataChunk() );
-  m_datafifo.itemcount++;
-  m_datafifo.cond.notify_all();
 }
 //----------------------------------------------------------------------
 void Client::release()
 {
-  // TODO: consider using a recursive mutex, instead of checking thread id
+  xlog_write1("Client::release", __FILE__, __LINE__);
+  _INFO_(m_logsvc, "client: release has been called, fd=" << fd());
+
+
+  // TODO: have a problem here!!!!!  ... how do we handle the worker thread,
+  // or non-worker thread, coming in here?
 
   // Very first action is to prevent further callbacks into the client.  The
   // lock is taken to ensure there is no callback in progress.
-  if (pthread_self() == m_task_tid)
+//  if (pthread_self() == m_task_tid)
+  if (pthread_self() == 0)
   {
     m_cb = NULL;
   }
@@ -691,15 +740,162 @@ void Client::release()
     m_cb = NULL;
   }
 
-  // TODO: if the shutdown approach looks like working, need to change how we
-  // hangle the request_delete.
+  {
+    // TODO: could call ::shutdown here.  Why? so, that we indicate end of
+    // stream as quickly as possible when owner session has notified us of
+    // close.
 
-  // request a close, just in case user-application forgot
+    /* The purpose of this lock is to prevent the Reactor thread from seeing
+     * the eWantDelete flag and then deleting this instance before the called
+     * to request_attn() is made.  This has happened; this object gets deleted
+     * as the call to request_attn() is made, causing all kinds of trouble. */
+    cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
 
-  m_attn_flags = m_attn_flags bitor eWantShutdown;
-  m_attn_flags = m_attn_flags bitor eWantDelete;
-  if (reactor()) reactor()->request_attn();
-  xlog_write("Client::release()  completed", __FILE__, __LINE__);
+    // request a close, just in case user-application forgot to request a shutdown
+    m_attn_flags |= (eWantShutdown|eWantDelete);
+
+    m_tdestroy  = ::time(NULL);
+
+    xlog_write1("Client::release --> calling request_attn()", __FILE__, __LINE__);
+    if (reactor()) reactor()->request_attn();
+  }
+
+  /* WARNING: once we have set the flags, this Client instance could be
+   * deleted at any time. */
+}
+//----------------------------------------------------------------------
+bool Client::has_work()
+{
+  {
+    cpp11::lock_guard<cpp11::mutex> guard( m_datafifo.mutex );
+    if (m_datafifo.itemcount || m_datafifo.items.size())
+      return true;
+    else
+      return false;
+  }
+}
+//----------------------------------------------------------------------
+void Client::do_work()
+{
+  xlog_write1("Client::do_work", __FILE__, __LINE__);
+  {
+    cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+    if (m_cb == NULL)
+    {
+      // we are no longer sending data to the client, so, ignore any work request
+      cpp11::lock_guard<cpp11::mutex> lock( m_datafifo.mutex );
+      m_datafifo.items.clear();
+      m_datafifo.itemcount=0;
+      m_datafifo.pending=0;
+      return;
+    }
+  }
+
+  ReactorReadBuffer&buf = m_buf;
+  bool invoke_process_close = false;
+
+  {
+    cpp11::lock_guard<cpp11::mutex> lock( m_datafifo.mutex );
+
+    // copy all pending data into our inbound-buffer
+    while (m_datafifo.itemcount and !invoke_process_close)
+    {
+      DataChunk& front = m_datafifo.items.front();
+
+      if (front.size == 0) // got sentinel object
+      {
+        // don't process any more pending inbound chunks after receiving the
+        // sentinel object (however, for data that has already been copied
+        // into the inbound-buffer, we need to pass that back to the client).
+        invoke_process_close = true;
+      }
+      else
+      {
+        while (buf.space_remain() < front.size)
+        {
+          // TODO: need to handle throw on growth error
+          _DEBUG_(m_logsvc, "client: growing buffer, currently at " << buf.capacity());
+          buf.grow(); // throws on failure - TODO: need to handle this
+        }
+
+        // The cancopy amount is just front.size(). We can sure of this due
+        // to the preceeding growth. Ie, we don't need to compare it to the
+        // space remaining in the buffer.
+        size_t cancopy = front.size;
+        if (cancopy)
+        {
+          // good, readbuffer can accept more data
+          memcpy(buf.wp(), &(front.buf[front.start]), cancopy);
+          buf.incr_bytesavail( cancopy );
+
+          front.size  -= cancopy;
+          front.start += cancopy;
+        }
+      }
+
+      m_datafifo.itemcount--;
+      m_datafifo.items.pop_front();  // no need to check if front has been used up
+    }
+
+  } // end of lock
+
+
+  // We have released the lock, which will allow the IO thread to
+  // proceed. Now pass our bytes to the derived method.
+  while ( buf.bytesavail() )
+  {
+    // TODO: what happens if an exception is thrown?
+    size_t consumed = 0;
+
+    {
+      cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+      if (m_cb)
+      {
+        try
+        {
+          consumed = m_cb->process_input(this, buf.rp(), buf.bytesavail());
+        }
+        catch (...)
+        {
+
+          // TODO: what should we do here?
+          std::string leading(buf.rp(), 20);
+          _WARN_(m_logsvc, "*** EXCEPTION: [" << leading << "]");
+
+        }
+      }
+    }
+
+    if (consumed>0)
+      buf.consume( consumed );
+    else
+      break;
+  }
+
+  buf.shift_pending_to_array_start();
+
+  if (invoke_process_close)
+  {
+    {
+      cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+      if (m_cb)
+      {
+        xlog_write1("Client::do_work  --> m_cb->process_close", __FILE__, __LINE__);
+        m_cb->process_close(this);
+      }
+
+      m_cb = NULL;  // prevent any futher inbound flow
+    }
+
+    // clear the inbound data queue, just in case some data found it way in
+    // there.
+    {
+      cpp11::lock_guard<cpp11::mutex> lock( m_datafifo.mutex );
+      m_datafifo.items.clear();
+      m_datafifo.itemcount=0;
+      m_datafifo.pending=0;
+    }
+  }
 }
 //----------------------------------------------------------------------
 } // namespace exio

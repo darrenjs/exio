@@ -1,3 +1,22 @@
+/*
+    Copyright 2013, Darren Smith
+
+    This file is part of exio, a library for providing administration,
+    monitoring and alerting capabilities to an application.
+
+    exio is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    exio is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with exio.  If not, see <http://www.gnu.org/licenses/>.
+*/
 #ifndef EXIO_CLIENT_H
 #define EXIO_CLIENT_H
 
@@ -6,9 +25,13 @@
 #include "atomic.h"
 #include "condition_variable.h"
 
+#include "exio/ReactorReadBuffer.h"
+
 #include <queue>
 #include <deque>
 #include <list>
+
+#include <stdint.h>
 
 namespace exio {
 
@@ -23,14 +46,20 @@ namespace exio {
 class ReactorClient
 {
   public:
+    enum IOState { IO_default = 0,
+                   IO_close,
+                   IO_read_again };
+  public:
 
     ReactorClient(Reactor* r, int fd);
 
-    virtual int  handle_input() = 0;
-    virtual void handle_output() = 0;
+    virtual IOState handle_input() = 0;
+    virtual IOState handle_output() = 0;
+
     virtual void handle_close() = 0;
     virtual void handle_shutdown() = 0;
     virtual int  events() = 0;
+    virtual bool has_work() = 0;
 
     int      fd()       const { return m_fd; }
 
@@ -38,20 +67,28 @@ class ReactorClient
 
     bool    io_open() const { return m_io_closed==false; }
 
-    size_t  bytes_out()  const { return m_bytes_out; }
-    size_t  bytes_in()   const { return m_bytes_in; }
+    uint64_t bytes_out()  const { return m_bytes_out; }
+    uint64_t bytes_in()   const { return m_bytes_in; }
     time_t  last_write() const { return m_last_write; }
     time_t  last_read()  const { return m_last_read; }
 
+    void update_run_state_for_worker(char& oldstate, char& newstate);
+    void update_run_state_for_reactor(char& oldstate, char& newstate);
+    void set_run_state();
+    char get_run_state();
+
+
+    virtual void do_work() = 0;
+
     enum AttnBits
     {
-      eWantClose    = 0x01,
+      //eWantClose    = 0x01,
       eWantShutdown = 0x02,
-      eWantDelete   = 0x04
+      eWantDelete   = 0x04,
+      eShutdownDone = 0x08
     };
 
-    int attn_flag() const { return m_attn_flags; }
-
+    int attn_flag() const;
 
   protected:
     virtual ~ReactorClient(){}
@@ -59,6 +96,7 @@ class ReactorClient
   private:
     ReactorClient(const ReactorClient&);
     ReactorClient& operator=(const ReactorClient&);
+    int destroy_cycle(time_t);
 
     Reactor* m_reactor;
     int      m_fd;
@@ -66,15 +104,21 @@ class ReactorClient
 
   protected:
     cpp11::atomic_bool m_io_closed;
-    cpp11::atomic_bool m_io_shutdown;
 
-    size_t   m_bytes_out;
-    size_t   m_bytes_in;
+    uint64_t m_bytes_out;
+    uint64_t m_bytes_in;
     time_t   m_last_write;
     time_t   m_last_read;
 
   protected:
-    int      m_attn_flags;
+    int                   m_attn_flags;
+    mutable cpp11::mutex  m_attn_mutex;
+
+    time_t   m_tdestroy;
+
+    char m_runstate;
+    cpp11::mutex m_runstate_mutex;
+
 
     friend class Reactor;
 };
@@ -111,8 +155,8 @@ class Client : public ReactorClient
     /* Queue data to send  / close socket */
     int queue(const char*, size_t, bool request_close = false);
 
-    int       task_lwp() const { return m_task_lwp; }
-    pthread_t task_tid() const { return m_task_tid; }
+    int       task_lwp() const { return 0; }
+    pthread_t task_tid() const { return 0; }
 
     size_t pending_out() const;
 
@@ -120,6 +164,7 @@ class Client : public ReactorClient
     // bytes are on both the queue and the memory buffer, so, need to ready
     // from two locations.
 
+    virtual void do_work() ;
 
   protected:
 
@@ -129,14 +174,15 @@ class Client : public ReactorClient
     Client(const Client&); // no copy
     Client& operator=(const Client&); // no assignment
 
-    void task_thread_TEP();
     int  process_inbound_bytes(ReactorReadBuffer&);
 
-    void request_task_thread_stop();
 
     /* Reactor callbacks */
-    int handle_input();
-    void handle_output();
+
+    virtual ReactorClient::IOState handle_input();
+    virtual ReactorClient::IOState handle_output();
+    virtual bool has_work() ;
+
     void handle_close();
     void handle_shutdown();
     int  events();
@@ -177,14 +223,12 @@ class Client : public ReactorClient
         OutboundQueue();
     } m_out_q;
 
-    cpp11::thread *    m_task_thread;
-    pthread_t          m_task_tid;
-    int                m_task_lwp;
 
     cpp11::mutex     m_cb_mtx; // callback mutex
     ClientCallback * m_cb;       // null => callbacks no longer allowed
 
     size_t m_out_pend_max;
+    ReactorReadBuffer m_buf;
 
   protected:
 
