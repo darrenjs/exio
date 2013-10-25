@@ -279,13 +279,16 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
   {
     qi.size = protocol.encodeMsg(msg, qi.sb());
 
-    int result;
-    if (m_io_handle) result = m_io_handle->queue(qi.buf(), qi.size, false);
-
-    if (result == -1)
+    if (m_io_handle)
     {
-      _ERROR_(m_appsvc.log(), "Dropping slow consumer session " << m_id);
-      return true;
+      int result;
+      result = m_io_handle->queue(qi.buf(), qi.size, false);
+
+      if (result == -1)
+      {
+        _ERROR_(m_appsvc.log(), "Dropping slow consumer session " << m_id);
+        return true;
+      }
     }
     /*
       size_t sz = protocol.calc_encoded_size(msg);
