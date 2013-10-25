@@ -26,6 +26,11 @@
 #include "exio/SamBuffer.h"
 #include "exio/Reactor.h"
 
+extern "C"
+{
+#include <xlog/xlog.h>
+}
+
 #include "mutex.h"
 
 #include <sys/socket.h>
@@ -229,6 +234,8 @@ void AdminSession::init(Reactor* reactor)
 //----------------------------------------------------------------------
 AdminSession::~AdminSession()
 {
+  xlog_write1("AdminSession::~AdminSession", __FILE__, __LINE__);
+
   // TODO: need mutex protection around m_io_handle.  Well, probably is ok,
   // since the write is done in the destructor, ie, should be no more method
   // calls after this.
@@ -335,6 +342,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 void AdminSession::close()
 {
+  xlog_write1("AdminSession::close", __FILE__, __LINE__);
   if (m_io_handle) m_io_handle->queue(0,0,true);
 }
 
@@ -406,6 +414,7 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
 
 void AdminSession::process_close(Client*)  // callback, from IO
 {
+  _INFO_(m_appsvc.log(), "AdminSession:process_close");
   m_session_valid = false;
 
   m_listener->session_closed( *this );
@@ -458,17 +467,17 @@ time_t  AdminSession::last_write() const
   return (m_io_handle)? m_io_handle->last_write():0;
 }
 //----------------------------------------------------------------------
-size_t AdminSession::bytes_out()  const
+uint64_t AdminSession::bytes_out()  const
 {
   return (m_io_handle)? m_io_handle->bytes_out():0;
 }
 //----------------------------------------------------------------------
-size_t AdminSession::bytes_in()   const
+uint64_t AdminSession::bytes_in()   const
 {
   return (m_io_handle)? m_io_handle->bytes_in():0;
 }
 //----------------------------------------------------------------------
-size_t AdminSession::bytes_pend() const
+uint64_t AdminSession::bytes_pend() const
 {
   return (m_io_handle)? m_io_handle->pending_out():0;
 }

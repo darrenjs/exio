@@ -27,6 +27,8 @@
 #include <list>
 #include <iostream>
 
+#include <stdint.h>
+
 namespace sam
 {
   class txMessage;
@@ -104,9 +106,9 @@ class Reactor;
     // IO stats
     time_t start_time() const;
     time_t last_write() const;
-    size_t bytes_out()  const;
-    size_t bytes_in()   const;
-    size_t bytes_pend() const;
+    uint64_t bytes_out()  const;
+    uint64_t bytes_in()   const;
+    uint64_t bytes_pend() const;
 
   protected:
     virtual size_t process_input(Client*, const char*, int);
