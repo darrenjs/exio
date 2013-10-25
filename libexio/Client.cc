@@ -257,12 +257,12 @@ Client::~Client()   /* REACTOR THREAD */
   // destruction, to prevent callbacks into the dervied-class which has
   // already destructed!
   {
-    cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+    cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
     if (m_cb)
     {
-      m_cb = NULL;
       _WARN_(m_logsvc, "Client destructing but callbacks are still enabled!");
     }
+    m_cb = NULL;
   }
 
   /* clear up any memory */
@@ -531,20 +531,24 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
     {
       if (size > (m_out_pend_max - m_out_q.pending))
       {
+        /* The outbound half of the socket has become both flow controlled,
+         * and has backed up queued data into the exio framework to such an
+         * extend that we can no longer queue new data for sending.  The is
+         * the slow-consumner situation.  Approach taken is to start a close
+         * sequence on the socket.
+         */
+
         _ERROR_(m_logsvc, "client fd " << fd() << " reached max queue size");;
+
+        m_out_q.acceptmore = false;
 
         // note, since the outbound socket has probably been flow controlled,
         // we cannot request socket shutdown via the sentinel-object (because
-        // the handle_output might not get called again), so instead, just
-        // request the reactor to terminate us from here.
-        m_out_q.acceptmore = false;
-        {
-          cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
+        // the handle_output might not get called again), so instead, call
+        // shutdown immediately.
 
-          // TODO: also, consider calling the shutdown from here too
-          m_attn_flags = m_attn_flags bitor eWantShutdown;
-          if (reactor()) reactor()->request_attn();
-        }
+        do_shutdown_SHUT_WR();
+
         return -1;
       }
       else
@@ -602,14 +606,26 @@ ReactorClient::IOState Client::handle_output() /* REACTOR THREAD */
         return ReactorClient::IO_default;
       }
 
-      // handle close-io sentinel object
+      // handle close-io sentinel object - exio-client has requested an active
+      // socket close.
       if (*next == RawMsg())
       {
         next->freemem();
         m_out_q.items.erase( m_out_q.items.begin() );
         m_out_q.itemcount--;
 
-         // request controlled shutdown
+        // TODO: concern here is that we might end up, via the Reactor,
+        // calling close() on a socket fd too quickly after writing our last
+        // data item.  A well know problem with socket IO is that this rapid
+        // close() after write() can cause the most final bytes written to not
+        // be transmitted. So now we have put the shutdown in; however, might
+        // need to go further an introduction some kind of lifecycle for
+        // closing a socket.
+
+        // initial shutdown request
+        do_shutdown_SHUT_WR();
+
+         // request controlled close of socket
         return ReactorClient::IO_close;
       }
     }
@@ -701,50 +717,21 @@ void Client::handle_close()   /* REACTOR THREAD */
   }
 }
 //----------------------------------------------------------------------
-void Client::handle_shutdown()   /* REACTOR THREAD */
-{
-  /* point of this function is to protect shutdown from being called multiple
-   * times for a single socket.
-   */
-  if (not m_io_closed)
-  {
-    {
-      cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
-      if (m_attn_flags bitand eShutdownDone) return;
-      m_attn_flags or_eq eShutdownDone;
-    }
-
-    ::shutdown(fd(), SHUT_WR);
-  }
-}
-//----------------------------------------------------------------------
-void Client::release()
+void Client::release() /* ARBITRARY-CLIENT THREAD or WORKER THREAD */
 {
   xlog_write1("Client::release", __FILE__, __LINE__);
   _INFO_(m_logsvc, "client: release has been called, fd=" << fd());
 
-
-  // TODO: have a problem here!!!!!  ... how do we handle the worker thread,
-  // or non-worker thread, coming in here?
-
-  // Very first action is to prevent further callbacks into the client.  The
-  // lock is taken to ensure there is no callback in progress.
-//  if (pthread_self() == m_task_tid)
-  if (pthread_self() == 0)
   {
-    m_cb = NULL;
-  }
-  else
-  {
-    cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+    cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
     m_cb = NULL;
   }
 
-  {
-    // TODO: could call ::shutdown here.  Why? so, that we indicate end of
-    // stream as quickly as possible when owner session has notified us of
-    // close.
+  // call shutdown immediately, so that this is minimal delay to terminating
+  // the underlying IO communication.
+  do_shutdown_SHUT_WR();
 
+  {
     /* The purpose of this lock is to prevent the Reactor thread from seeing
      * the eWantDelete flag and then deleting this instance before the called
      * to request_attn() is made.  This has happened; this object gets deleted
@@ -752,7 +739,7 @@ void Client::release()
     cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
 
     // request a close, just in case user-application forgot to request a shutdown
-    m_attn_flags |= (eWantShutdown|eWantDelete);
+    m_attn_flags |= (eWantDelete);
 
     m_tdestroy  = ::time(NULL);
 
@@ -779,7 +766,7 @@ void Client::do_work()
 {
   xlog_write1("Client::do_work", __FILE__, __LINE__);
   {
-    cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+    cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
     if (m_cb == NULL)
     {
       // we are no longer sending data to the client, so, ignore any work request
@@ -844,25 +831,22 @@ void Client::do_work()
   // proceed. Now pass our bytes to the derived method.
   while ( buf.bytesavail() )
   {
-    // TODO: what happens if an exception is thrown?
     size_t consumed = 0;
 
+    cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
+    if (m_cb)
     {
-      cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
-      if (m_cb)
+      try
       {
-        try
-        {
-          consumed = m_cb->process_input(this, buf.rp(), buf.bytesavail());
-        }
-        catch (...)
-        {
-
-          // TODO: what should we do here?
-          std::string leading(buf.rp(), 20);
-          _WARN_(m_logsvc, "*** EXCEPTION: [" << leading << "]");
-
-        }
+        consumed = m_cb->process_input(this, buf.rp(), buf.bytesavail());
+      }
+      catch (const std::exception& err)
+      {
+        _WARN_(m_logsvc,"exception during process_input: " << err.what());
+      }
+      catch (...)
+      {
+        _WARN_(m_logsvc,"exception during process_input");
       }
     }
 
@@ -877,11 +861,23 @@ void Client::do_work()
   if (invoke_process_close)
   {
     {
-      cpp11::lock_guard<cpp11::mutex> guard( m_cb_mtx );
+      cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
       if (m_cb)
       {
         xlog_write1("Client::do_work  --> m_cb->process_close", __FILE__, __LINE__);
-        m_cb->process_close(this);
+
+        try
+        {
+          m_cb->process_close(this);
+        }
+        catch (const std::exception& err)
+        {
+          _WARN_(m_logsvc,"exception during process_close: " << err.what());
+        }
+        catch (...)
+        {
+        _WARN_(m_logsvc,"exception during process_close");
+        }
       }
 
       m_cb = NULL;  // prevent any futher inbound flow
@@ -895,6 +891,21 @@ void Client::do_work()
       m_datafifo.itemcount=0;
       m_datafifo.pending=0;
     }
+  }
+}
+//----------------------------------------------------------------------
+void Client::do_shutdown_SHUT_WR()
+{
+  /* protect shutdown from being called multiple times for socket */
+  if (not m_io_closed)
+  {
+    {
+      cpp11::lock_guard<cpp11::mutex> guard( m_attn_mutex );
+      if (m_attn_flags bitand eShutdownDone) return;
+      m_attn_flags or_eq eShutdownDone;
+    }
+
+    ::shutdown(fd(), SHUT_WR);
   }
 }
 //----------------------------------------------------------------------
@@ -940,5 +951,17 @@ ubuntu: enable gdb
 
 ubuntu: enable xterm accept (-nolisten option)
 
+
+*/
+
+
+
+/*
+
+Another item learnet: the callback needs to be protected with a mutex, becuase
+just as we are about to a call a client, we could get scheduled out for some
+time.  During that time, the client might release the Client object, and then
+get destroyed. Then, the suspended thread might wake up and attempt to invoke
+a call into the client object, which no longer exists!
 
 */

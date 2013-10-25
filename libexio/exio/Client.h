@@ -57,7 +57,7 @@ class ReactorClient
     virtual IOState handle_output() = 0;
 
     virtual void handle_close() = 0;
-    virtual void handle_shutdown() = 0;
+
     virtual int  events() = 0;
     virtual bool has_work() = 0;
 
@@ -83,7 +83,7 @@ class ReactorClient
     enum AttnBits
     {
       //eWantClose    = 0x01,
-      eWantShutdown = 0x02,
+      //eWantShutdown = 0x02,
       eWantDelete   = 0x04,
       eShutdownDone = 0x08
     };
@@ -184,8 +184,9 @@ class Client : public ReactorClient
     virtual bool has_work() ;
 
     void handle_close();
-    void handle_shutdown();
+
     int  events();
+    void do_shutdown_SHUT_WR();
 
     void shutdown_outq();
 
@@ -224,8 +225,8 @@ class Client : public ReactorClient
     } m_out_q;
 
 
-    cpp11::mutex     m_cb_mtx; // callback mutex
-    ClientCallback * m_cb;       // null => callbacks no longer allowed
+    cpp11::recursive_mutex m_cb_mtx;
+    ClientCallback *       m_cb; // null => callbacks not allowed
 
     size_t m_out_pend_max;
     ReactorReadBuffer m_buf;
