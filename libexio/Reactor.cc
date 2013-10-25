@@ -75,6 +75,7 @@ struct ReactorMsg
       eClose,
       eAdd,
       eAttn,
+      eDelete,
       eTerminate   /* terminate reactor thread */
     };
 
@@ -86,6 +87,7 @@ struct ReactorMsg
         case eClose      : return "eClose";
         case eAdd        : return "eAdd";
         case eAttn       : return "eAttn";
+        case eDelete     : return "eDelete";
         case eTerminate  : return "eTerminate";
         default : return "unknown";
       }
@@ -110,10 +112,30 @@ class ReactorNotifQ
 
     // TODO: is there a race condition in here, ie. the condition pushing of a
     // eNoEvent?
+
+    // TODO: remove inline
+
+    // TODO: don't even take the lock, if its NoEvent, and something is
+    // pending.  Is that possible?
+
+    // TODO: use raw pthreads
+
+    // TODO: run this code in isolation
+
+    // TODO: try to exhause the dequeue ... or see how it can fail
+
+    // TODO: alter the c++11 stuff, to avoid inlines come in the constructor
+    // and destructor.
+
+    // TODO: whatever I try, need to keep track of the versions.
+
+    // TODO: make the m_mutex in here get corrupted?
     void push_msg(const ReactorMsg& m)
     {
-      xlog_write("push_msg", __FILE__, __LINE__);
-      xlog_write(ReactorMsg::str(m.type), __FILE__, __LINE__);
+      // void* ptr = xlog_get_row1(__FILE__, __LINE__);
+      // xlog_append_cstr(ptr, "push_msg:");
+      // xlog_append_cstr(ptr, ReactorMsg::str(m.type));
+
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
 
       // if there are queued items, then we don't need to push another
@@ -133,6 +155,9 @@ class ReactorNotifQ
 
     void pull(std::deque<ReactorMsg>& dest)
     {
+      // void* ptr = xlog_get_row1(__FILE__, __LINE__);
+      // xlog_append_cstr(ptr, "-->poll:");
+
       dest.clear();
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
       m_pending.swap( dest );
@@ -140,6 +165,10 @@ class ReactorNotifQ
       // drain pipe
       char buf[1024];
       while (read(m_pipein, buf, sizeof(buf))>0) { }
+
+      // ptr = xlog_get_row1(__FILE__, __LINE__);
+      // xlog_append_cstr(ptr, "-->poll: dest.size()=");
+      // xlog_append_uint(ptr, dest.size());
     }
 
   private:
@@ -152,17 +181,13 @@ class ReactorNotifQ
 //----------------------------------------------------------------------
 
 /* Constructor */
-Reactor::Reactor(LogService* log)
+Reactor::Reactor(LogService* log, int nworkers)
   : m_log(log),
     m_is_stopping(false),
+    m_last_cleanup(0),
     m_notifq(NULL),
     m_io(NULL)
 {
-  xlog_config cfg;
-  memset(&cfg, 0, sizeof(xlog_config));
-  cfg.num_counters = 10;
-  cfg.num_rows = 10000;
-  xlog_init("/var/tmp/xlog.dat", cfg);
 
   m_pipefd[0]=-1;  // reader
   m_pipefd[1]=-1;  // writer
@@ -181,8 +206,12 @@ Reactor::Reactor(LogService* log)
   }
   m_notifq = new ReactorNotifQ(m_pipefd[0], m_pipefd[1]);
 
-  // Danger: creation of internal thread should be last action of constructor,
-  // so that object construction is complete before accessed by thread.
+  /* create internal threads last as last step of object construction */
+  for (int i = 0; i < nworkers; i++)
+  {
+    m_workers.push_back( new cpp11::thread(&Reactor::worker_TEP, this)  );
+  }
+
   m_io = new cpp11::thread(&Reactor::reactor_io_TEP, this);
 }
 
@@ -190,6 +219,7 @@ Reactor::Reactor(LogService* log)
 /* Destructor */
 Reactor::~Reactor()
 {
+  xlog_write1("Reactor::~Reactor", __FILE__, __LINE__);
   // // wait until all clients removed - note, we are not doing anything clever
   // // like deleting the clients on demand, or setting a flag that the reactor
   // // is no invalid. It is up to the user application to ensure the reactor is
@@ -202,9 +232,10 @@ Reactor::~Reactor()
   //   }
   // }
 
+
   /* Stop reactor thread */
   m_is_stopping = true;
-  xlog_write("pushing termiante thread", __FILE__, __LINE__);
+  xlog_write1("pushing termiante thread", __FILE__, __LINE__);
   m_notifq->push_msg(ReactorMsg(ReactorMsg::eTerminate));
 
   // Ensure our thread has been joined. Note: it is criticaly important that
@@ -215,11 +246,43 @@ Reactor::~Reactor()
   // deleted member data, a hard to identify error will occur!.
   m_io -> join();
   delete m_io;
-
   delete m_notifq;
+
+  // TODO: have decided to shut down workers after the reactor. This is
+  // because the reactor is a source of input for the workers, so once the
+  // reactor has shutdown, the workers cannot get anymore work.
+
+  /* shutdown worker threads */
+  xlog_write1("joining worker threads", __FILE__, __LINE__);
+  {
+    cpp11::lock_guard<cpp11::mutex> guard( m_runq.mutex );
+    m_runq.items.push_back(NULL);
+    m_runq.itemcount++;
+    m_runq.cond.notify_all();
+  }
+  for (std::vector<cpp11::thread*>::iterator it = m_workers.begin();
+       it!=m_workers.end(); it++)
+  {
+    cpp11::thread * thr = *it;
+    thr->join();
+    delete thr;
+    *it = NULL;
+  }
 
   close(m_pipefd[0]);
   close(m_pipefd[1]);
+
+  /* final attempt to close sockets */
+  for (std::vector<ReactorClient*>::iterator iter = m_clients.begin();
+       iter != m_clients.end(); ++iter)
+  {
+    xlog_write1("Reactor::~Reactor  --> deleting a client", __FILE__, __LINE__);
+    ReactorClient* client = *iter;
+    client->handle_shutdown();
+    client->handle_close();
+    delete client;
+  }
+
 }
 
 //----------------------------------------------------------------------
@@ -241,28 +304,6 @@ void Reactor::reactor_io_TEP()
     catch (...)
     {
       _ERROR_(m_log, "reactor: exception from event loop: unknown");
-    }
-
-    /* NOTE: we don't allow exceptions to cause the reactor thread to
-     * terminate */
-  }
-
-  // final chance for clean up -- nothing sophisticated, just attend to the
-  // clients one last time, then, force socket close.
-  attend_clients();
-
-//  cpp11::unique_lock<cpp11::mutex> guard(m_clients.lock);
-  if (m_clients.ptrs.empty()==false or m_clients.ptrs.size()>0)
-  {
-    _WARN_(m_log, "reactor terminating, but clients still exist");
-    for (std::vector<ReactorClient*>::iterator iter = m_clients.ptrs.begin();
-         iter != m_clients.ptrs.end(); ++iter)
-    {
-      ReactorClient* client = *iter;
-      if (client->io_open()) client->handle_close();
-
-      // NOTE: we don't delete the client, because it might still be used by
-      // the application.
     }
   }
 }
@@ -293,8 +334,8 @@ void Reactor::reactor_main_loop()
 //      cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
 
       // build the array of pollfd, and companion array of client-id's
-      for (std::vector<ReactorClient*>::iterator iter = m_clients.ptrs.begin();
-           iter != m_clients.ptrs.end(); ++iter)
+      for (std::vector<ReactorClient*>::iterator iter = m_clients.begin();
+           iter != m_clients.end(); ++iter)
       {
         ReactorClient* client = *iter;
         if (client->io_open())
@@ -329,40 +370,14 @@ void Reactor::reactor_main_loop()
     //   _DEBUG_(m_log, "reactor: into poll, events: " << osin.str() );
     // }
 
-    int timeout_msec = -1;
+    // Are there client objects that are going through their closure
+    // death-cycle .. if so, need a timeout. Choose a 1 second interval.
+    int timeout = (!m_destroying.empty() || m_destroying.size())? 1000:-1;
 
-    xlog_write("poll-in", __FILE__, __LINE__);
-    int nready = poll(&fdset[0], fdset.size(), timeout_msec);
-    xlog_write("poll-out", __FILE__, __LINE__);
-
-
-    // // Reactor is stopping.  This is our last chance to close any open sockets
-    // // and delete client objects.  We generally don't want to delay exit of
-    // // this reactor thread, because it will in turn delay the completion of
-    // // the reactor destructor
-    // if (m_is_stopping) return;
-    // {
-    //   cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
-    //   for (std::vector<ReactorClient*>::iterator it = m_clients.ptrs.begin();
-    //        it != m_clients.ptrs.end(); ++it)
-    //   {
-    //     ReactorClient* client = *it;
-    //     client->handle_close();
-    //     if (client->m_release_count)
-    //     {
-    //       delete client;
-    //     }
-    //     else
-    //     {
-    //       // danger: we cannot delete the client, because a session still
-    //       // appears to be using it. Best case problem, is we have a memory
-    //       // leak.
-    //       _ERROR_(m_log, "during reactor termination, unable to delete Client which is still in used");
-
-    //     }
-    //   }
-    //   return;
-    // }
+//    xlog_write1("poll-in", __FILE__, __LINE__);
+    int nready = poll(&fdset[0], fdset.size(), timeout);
+    xlog_write1("reactor: out of poll", __FILE__, __LINE__);
+//    xlog_write1("poll-out", __FILE__, __LINE__);
 
     // TODO: move this logging to a separate function
     // {
@@ -401,31 +416,40 @@ void Reactor::reactor_main_loop()
 
         ReactorClient*   ptr       = fdmap[ iter->fd ];
         int              revents   = iter->revents;
-        int              readagain = 0;
+        ReactorClient::IOState  iost = ReactorClient::IO_default;
 
         if (revents bitand POLLIN)
         {
-          if (ptr->io_open()) readagain = ptr->handle_input();
+          //void * rp = xlog_write1("POLLIN fd=", __FILE__, __LINE__);
+          //xlog_append_sint(rp,iter->fd);
+          if (ptr->io_open()) iost = ptr->handle_input();
         }
-        if (revents bitand POLLPRI)
-        {
-          // don't handle POLLPRI
-        }
+
+        if (revents bitand POLLPRI) { /* don't handle POLLPRI */ }
+
         if (revents bitand POLLOUT)
         {
-          if (ptr->io_open()) ptr->handle_output();
+          //void * rp = xlog_write1("POLLOUT fd=", __FILE__, __LINE__);
+          //xlog_append_sint(rp,iter->fd);
+          if (ptr->io_open()) iost = ptr->handle_output();
         }
-        if ( ((revents bitand POLLRDHUP) or
-              (revents bitand POLLERR) or
-              (revents bitand POLLHUP) or
-              (revents bitand POLLNVAL)) and !readagain)
+
+        if ( (((revents bitand POLLRDHUP) or
+               (revents bitand POLLERR) or
+               (revents bitand POLLHUP) or
+               (revents bitand POLLNVAL)) and
+              iost != ReactorClient::IO_read_again)
+             or (iost==ReactorClient::IO_close) )
         {
-          xlog_write("poll detected file close, calling ptr->handle_close()", __FILE__, __LINE__);
+//          xlog_write1("poll detected file close, calling ptr->handle_close()", __FILE__, __LINE__);
+
+          //void * rp = xlog_write1("POLLEND fd=", __FILE__, __LINE__);
+          //xlog_append_sint(rp,iter->fd);
+          _INFO_(m_log, "reactor: poll detected close");
           ptr->handle_close();
         }
       }
 
-      // Lets check if there has been an activity on the internal signal byte
       if (fdset[0].revents)
       {
         std::deque<ReactorMsg> nl;
@@ -435,47 +459,94 @@ void Reactor::reactor_main_loop()
           handle_reactor_msg(*n);
         }
       }
+
     }
 
 
-    // look for clients that we can safely delete
-    // {
-    //   cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
 
-    //   std::set<ReactorClient*> removedlist;
-    //   for (std::vector<ReactorClient*>::iterator iter = m_clients.ptrs.begin();
-    //        iter != m_clients.ptrs.end(); ++iter)
-    //   {
-    //     ReactorClient* client = *iter;
+    /* search for clients with work to do */
+    // TODO: this can be made more efficient, based on the earlier IO
+    for (std::vector<ReactorClient*>::iterator it = m_clients.begin();
+         it != m_clients.end(); ++it)
+    {
+      ReactorClient* client = *it;
 
-    //     if (client->m_release_count == 1)
-    //     {
-    //       // step 1: mark the release time, to introduce a saftey delay
-    //       client->m_delete_time = time(NULL) + 10;
-    //       client->m_release_count = 2;
-    //     }
-    //     else if (client->m_release_count == 2)
-    //     {
-    //       if (time(NULL) > client->m_delete_time)
-    //       {
-    //         removedlist.insert( client );
-    //         client->m_release_count == 3;
-    //       }
-    //     }
-    //   }
+      char oldstate;
+      char newstate;
 
-    //   if (!removedlist.empty())
-    //   {
-    //     std::vector<ReactorClient*> temp;
-    //     for (std::vector<ReactorClient*>::iterator it = m_clients.ptrs.begin();
-    //          it != m_clients.ptrs.end(); ++it)
-    //     {
-    //       if (removedlist.find(*it) == removedlist.end()) temp.push_back(*it);
-    //     }
-    //     m_clients.ptrs.swap( temp );
-    //   }
-    // }
+      client->update_run_state_for_reactor(oldstate, newstate);
+      //_INFO_(m_log, "reactor: oldstate=" << oldstate << ", newstate=" << newstate << " for, fd " << client->fd());
 
+      if (oldstate=='N' and newstate=='Q')
+      {
+        //xlog_write1("queuing a client for worker", __FILE__, __LINE__);
+        //_INFO_(m_log, "reactor: pusing client onto Q, fd " << client->fd());
+        cpp11::lock_guard<cpp11::mutex> guard( m_runq.mutex );
+        m_runq.items.push_back(client);
+        m_runq.itemcount++;
+
+        m_runq.cond.notify_one();
+      }
+    }
+
+
+
+    /* Destruction cycle */
+    time_t now = ::time(NULL);
+    std::set<ReactorClient*> deletenow;
+    if (!m_destroying.empty() and
+        (   ((now > m_last_cleanup) and ((now-m_last_cleanup)>2))
+         or (now < m_last_cleanup) ))
+    {
+      //xlog_write1("reactor: cleanup routine starting", __FILE__, __LINE__);
+      m_last_cleanup = now;
+
+      for (std::set<ReactorClient*>::iterator it = m_destroying.begin();
+           it != m_destroying.end(); ++it)
+      {
+        ReactorClient* client = *it;
+        if (client->destroy_cycle(now))
+        {
+
+          // TODO: note: before we mark a client for deletion, we must ensure
+          // it is not queued.  Also, maybe, we should set the client to have
+          // a state, ie, K could be its state which means, ready to be
+          // killed ????
+          if (client->get_run_state() == 'N')
+          {
+            deletenow.insert(client);
+          }
+          else
+          {
+            xlog_write1("reactor: cleanup --> postpone delete for client, not N", __FILE__, __LINE__);
+          }
+        }
+      }
+    }
+
+    if (!deletenow.empty())
+    {
+      /* rebuild the client list */
+      std::vector<ReactorClient*> temp;
+      for (std::vector<ReactorClient*>::iterator it = m_clients.begin();
+           it != m_clients.end(); ++it)
+      {
+        if (deletenow.find(*it) == deletenow.end()) temp.push_back(*it);
+      }
+      m_clients.swap( temp );
+
+      /* perform actual deletion */
+      for (std::set<ReactorClient*>::iterator it = deletenow.begin();
+           it != deletenow.end(); ++it)
+      {
+        ReactorClient* client = *it;
+
+        m_destroying.erase(*it);
+
+        xlog_write1("reactor: cleanup --> calling delete", __FILE__, __LINE__);
+        delete client;
+      }
+    }
 
   } // while
 
@@ -495,7 +566,7 @@ void Reactor::invalidate()
 
 // void Reactor::request_close(ReactorClient* client)
 // {
-//   xlog_write("request_close", __FILE__, __LINE__);
+//   xlog_write1("request_close", __FILE__, __LINE__);
 //   ReactorMsg msg(ReactorMsg::eClose, client);
 //   m_notifq->push_msg(msg);
 // }
@@ -539,20 +610,20 @@ void Reactor::request_attn()
 
 void Reactor::handle_reactor_msg(const ReactorMsg& msg)
 {
-  xlog_write("ReactorMsg::handle_reactor_msg", __FILE__, __LINE__);
+//  xlog_write1("ReactorMsg::handle_reactor_msg", __FILE__, __LINE__);
   switch(msg.type)
   {
     case ReactorMsg::eNoEvent  : break;
     // case ReactorMsg::eClose      :
     // {
-    //   xlog_write("ReactorMsg::eClose", __FILE__, __LINE__);
-    //   xlog_write("msg.ptr->handle_close()", __FILE__, __LINE__);
+    //   xlog_write1("ReactorMsg::eClose", __FILE__, __LINE__);
+    //   xlog_write1("msg.ptr->handle_close()", __FILE__, __LINE__);
     //   msg.ptr->handle_close();
     //   break;
     // }
     // case ReactorMsg::eShutdown     :
     // {
-    //   xlog_write("ReactorMsg::eShutdown", __FILE__, __LINE__);
+    //   xlog_write1("ReactorMsg::eShutdown", __FILE__, __LINE__);
     //   if (msg.ptr->io_open())
     //   {
     //     _DEBUG_(m_log, "reactor: shutdown(fd=" << msg.ptr->fd() << ", SHUT_WR)");
@@ -565,16 +636,16 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     // }
     case ReactorMsg::eAdd :
     {
-      xlog_write("ReactorMsg::eAdd", __FILE__, __LINE__);
+      xlog_write1("ReactorMsg::eAdd", __FILE__, __LINE__);
 //      cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
-      m_clients.ptrs.push_back( msg.ptr );
+      m_clients.push_back( msg.ptr );
       _DEBUG_(m_log, "reactor: added new client, fd " << msg.ptr->fd()
-              << ", total clients " << m_clients.ptrs.size());
+              << ", total clients " << m_clients.size());
       break;
     }
     // case ReactorMsg::eRelease :
     // {
-    //   xlog_write("ReactorMsg::eRelease", __FILE__, __LINE__);
+    //   xlog_write1("ReactorMsg::eRelease", __FILE__, __LINE__);
 
     //   msg.ptr->m_release_count = 1; // mark as released
 
@@ -592,13 +663,11 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     // }
     case ReactorMsg::eTerminate :
     {
-      xlog_write("ReactorMsg::eTerminate", __FILE__, __LINE__);
       m_is_stopping = true; //normally already set
       break;
     }
     case ReactorMsg::eAttn :
     {
-      xlog_write("ReactorMsg::eAttn", __FILE__, __LINE__);
       attend_clients();
       break;
     }
@@ -614,69 +683,128 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
 
 void Reactor::attend_clients()
 {
-  xlog_write("--> Reactor::attend_clients", __FILE__, __LINE__);
-  std::set<ReactorClient*> removedlist;
 
-  // TODO: can we reduce the scope of this lock?
-//  cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
-
-
-  for (std::vector<ReactorClient*>::iterator it = m_clients.ptrs.begin();
-       it != m_clients.ptrs.end(); ++it)
+  for (std::vector<ReactorClient*>::iterator it = m_clients.begin();
+       it != m_clients.end(); ++it)
   {
     ReactorClient* client = *it;
 
-    int attn_flags = client->attn_flag();
-    if (attn_flags bitand ReactorClient::eWantShutdown)
+    int const attn = client->attn_flag();
+
+    if ( (attn & (ReactorClient::eWantShutdown|ReactorClient::eShutdownDone))
+         == ReactorClient::eWantShutdown)
     {
       if (client->io_open())
       {
-        xlog_write("attend_clients -> Shutdown", __FILE__, __LINE__);
         client->handle_shutdown();
       }
     }
-    if (attn_flags bitand ReactorClient::eWantClose)
+
+    if (attn bitand ReactorClient::eWantDelete)
     {
-      if (client->io_open())
-      {
-        xlog_write("attend_clients -> close", __FILE__, __LINE__);
-        client->handle_close();
-      }
-    }
-    if (attn_flags bitand ReactorClient::eWantDelete)
-    {
-      xlog_write("attend_clients -> insert onto remove list", __FILE__, __LINE__);
-      removedlist.insert( client );
+      // TODO: need to raise another flag, on the client, to prevent coming
+      // here again and again and again
+      m_destroying.insert( client );
     }
   }
-
-  /* perform actual deletion */
-  if (!removedlist.empty())
-  {
-    std::vector<ReactorClient*> temp;
-    temp.reserve( m_clients.ptrs.size() - removedlist.size() );
-
-    for (std::vector<ReactorClient*>::iterator it = m_clients.ptrs.begin();
-         it != m_clients.ptrs.end(); ++it)
-    {
-      ReactorClient* client = *it;
-      if (removedlist.find(client) != removedlist.end())
-      {
-        xlog_write("attend_clients -> handle_close before delete!!!", __FILE__, __LINE__);
-        if (client->io_open()) client->handle_close();
-        xlog_write("attend_clients -> deleting client!!!", __FILE__, __LINE__);
-        delete client;
-      }
-      else
-      {
-        temp.push_back(*it);
-      }
-    }
-    m_clients.ptrs.swap( temp );
-  }
-
-  xlog_write("<-- Reactor::attend_clients", __FILE__, __LINE__);
 }
 
 //----------------------------------------------------------------------
+
+void Reactor::worker_TEP()
+{
+  while(true)
+  {
+    try
+    {
+     bool exitnow = worker_TEP_impl();
+     if (exitnow) return;
+    }
+    catch(const std::exception& e)
+    {
+      _WARN_(m_log, "exception from worker_TEP_impl(): " <<e.what());
+    }
+    catch(...)
+    {
+      _WARN_(m_log, "exception from worker_TEP_impl(): unknown");
+    }
+  }
+}
+//----------------------------------------------------------------------
+bool Reactor::worker_TEP_impl()
+{
+  ReactorClient* client = NULL;
+  {
+    /* Note the requirement for unique_lock here.  This is the type expected
+       by the condition variable wait() method, because the condition
+       variable will need to release and acquire the lock as wait() is
+       entered and exited.
+    */
+    cpp11::unique_lock<cpp11::mutex> lock( m_runq.mutex );
+
+    /* Loop/condition predicate here is a separate boolean flag.  Initially
+     * the predicate was simply a call to -- m_q.items.empty() -- however,
+     * strangely, that did not always work. There was some race-condition,
+     * which was fairly well repeatable. It seems that somehow, when using
+     * empty(), it was possible to add an item to the queue and for empty()
+     * to still be true, and this even when the call to push(), and the call
+     * to empty(), were pretected with mutexes.  Replaced the empty() with
+     * size()!=0 fixed the problem.  Because I didn't understand why empty()
+     * failed and size() worked, here I've gone for additional robustness,
+     * but using an boolean approach.
+     *
+     * NOTE: comment came from a problem found in AdminIO.cc code.
+     */
+    while (m_runq.itemcount == 0)
+    {
+      m_runq.cond.wait( lock );
+    }
+
+    // take the top item requiring work
+    client = m_runq.items.front();
+
+    if (client == NULL)
+    {
+      // A null pointer signifies "end thread", so we return.  To allow other
+      // threads to also return, we leave the item on the queue.
+      return true;
+    }
+
+    m_runq.items.pop_front();
+    m_runq.itemcount--;
+  }
+
+  // work on the client while there is data
+
+  _INFO_(m_log, "worker thread got work, fd=" << client->fd());
+  client->set_run_state();
+  while (true)
+  {
+    try
+    {
+      client->do_work();
+    }
+    catch(const std::exception& e)
+    {
+      _WARN_(m_log, "exception processing socket data: " <<e.what());
+    }
+    catch(...)
+    {
+      _WARN_(m_log, "exception processing socket data: unknown" );
+    }
+
+    char oldstate;
+    char newstate;
+    client->update_run_state_for_worker(oldstate, newstate);
+
+    if (newstate != 'R') break;
+  }
+
+  return false;
+}
+
+
+
+//----------------------------------------------------------------------
+
 } // namespace exio

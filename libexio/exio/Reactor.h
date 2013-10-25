@@ -34,10 +34,11 @@ namespace exio {
   class ReactorMsg;
   class ReactorNotifQ;
 
+
 class Reactor
 {
   public:
-    Reactor(LogService*);
+    Reactor(LogService*, int nworkers=2);
     ~Reactor();
 
     void add_client(ReactorClient*);
@@ -57,6 +58,9 @@ class Reactor
     void reactor_main_loop();
     void reactor_io_TEP();
 
+    void worker_TEP();
+    bool worker_TEP_impl();
+
     void handle_reactor_msg(const ReactorMsg&);
     void attend_clients();
 
@@ -65,14 +69,26 @@ class Reactor
 
     int m_pipefd[2]; // TODO: move into the NotifQ
 
-    mutable struct
-    {
-        std::vector<ReactorClient*> ptrs;
-//        cpp11::mutex lock;
-    } m_clients;
+
+    std::vector<ReactorClient*> m_clients;
+    std::set<ReactorClient*>    m_destroying;
+    time_t m_last_cleanup;
 
     ReactorNotifQ * m_notifq;
     cpp11::thread * m_io;
+
+
+    struct RunQ
+    {
+        cpp11::mutex                  mutex;
+        std::list <ReactorClient* >  items;
+        size_t                        itemcount;
+        cpp11::condition_variable     cond;
+        RunQ () : itemcount(0) {}
+    } m_runq;
+
+
+    std::vector<cpp11::thread*> m_workers;
 };
 
 } // namespace exio
