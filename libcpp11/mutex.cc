@@ -23,13 +23,15 @@
 
 namespace cpp11
 {
+
 //----------------------------------------------------------------------
 mutex::mutex()
 {
   // according to POSIX Threads, non-static mutexes must be initialised using
   // the function: pthread_mutex_init. It is only for static mutex instances
   // that the PTHREAD_MUTEX_INITIALIZER can be used.
-  pthread_mutex_init(&m_mutex, NULL);  // TODO: test retval
+  int e = pthread_mutex_init(&m_mutex, NULL);
+  if (e) throw std::runtime_error("pthread_mutex_init failed");
 }
 //----------------------------------------------------------------------
 mutex::~mutex()
@@ -40,7 +42,8 @@ mutex::~mutex()
 
   // release our mutex resource -- note, it is an error to release a locked
   // mutex, so caller beware!
-  pthread_mutex_destroy(&m_mutex);
+  int e = pthread_mutex_destroy(&m_mutex);
+  if (e) throw std::runtime_error("pthread_mutex_destroy failed");
 }
 //----------------------------------------------------------------------
 void mutex::lock()
@@ -51,7 +54,52 @@ void mutex::lock()
 //----------------------------------------------------------------------
 void mutex::unlock()
 {
-  pthread_mutex_unlock( &m_mutex );
+  int e = pthread_mutex_unlock( &m_mutex );
+  if (e) throw std::runtime_error("pthread_mutex_unlock failed");
 }
 //----------------------------------------------------------------------
+
+/* Recursive mutex */
+
+recursive_mutex::recursive_mutex()
+{
+  pthread_mutexattr_t attr;
+
+  int e;
+
+  e = pthread_mutexattr_init(&attr);
+  if (e != 0) throw std::runtime_error("pthread_mutexattr_init failed");
+
+  e = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+  if (e != 0) throw std::runtime_error("pthread_mutexattr_settype(PTHREAD_MUTEX_RECURSIVE) failed");
+
+  e = pthread_mutex_init(&m_mutex, &attr);
+  if (e != 0) throw std::runtime_error("pthread_mutex_init failed");
+
+  e = pthread_mutexattr_destroy(&attr);
+  if (e != 0) throw std::runtime_error("pthread_mutexattr_destroy failed");
+}
+
+
+//----------------------------------------------------------------------
+recursive_mutex::~recursive_mutex()
+{
+  int e =  pthread_mutex_destroy(&m_mutex);
+  if (e) throw std::runtime_error("pthread_mutex_destroy failed");
+}
+
+//----------------------------------------------------------------------
+void recursive_mutex::lock()
+{
+  int e = pthread_mutex_lock( &m_mutex );
+  if (e) throw std::runtime_error("pthread_mutex_lock failed");
+}
+
+//----------------------------------------------------------------------
+void recursive_mutex::unlock()
+{
+  int e = pthread_mutex_unlock( &m_mutex );
+  if (e) throw std::runtime_error("pthread_mutex_unlock failed");
+}
+
 }

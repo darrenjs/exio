@@ -159,6 +159,34 @@ class mutex
 };
 
 
+class recursive_mutex
+{
+    typedef pthread_mutex_t __native_type;
+    pthread_mutex_t m_mutex;
+
+  public:
+
+    typedef __native_type* native_handle_type;
+
+    recursive_mutex();
+    ~recursive_mutex();
+
+    void lock();
+    void unlock();
+
+    native_handle_type native_handle() { return &m_mutex; }
+
+  private:
+    /*
+     * This classes uses pthread recursive_mutexes, which cannot be copied, so prevent
+     * copy/assignment of this class.
+     */
+    recursive_mutex(const recursive_mutex&);
+    recursive_mutex& operator=(const recursive_mutex&);
+
+};
+
+
 }
 
 #endif
