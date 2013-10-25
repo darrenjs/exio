@@ -104,6 +104,7 @@ class thread
     struct _MemberImpl : public _Impl_base
     {
         typedef void (T::*PMF)() ;
+
         _MemberImpl( PMF pmf, T* obj )
           : m_pmf(pmf),
             m_obj(obj){ }
@@ -116,30 +117,45 @@ class thread
 
     /* This class is part of the thread internal's implementation, and not
      * intended for use by users. */
+    template <typename T, typename U>
+    struct _MemberImplUser : public _Impl_base
+    {
+        typedef void (T::*PMF)(U) ;
+
+        _MemberImplUser( PMF pmf, T* obj, U arg1 )
+          : m_pmf(pmf),
+            m_obj(obj),
+            m_arg1(arg1)
+        { }
+
+        virtual void _M_run() { (m_obj->*m_pmf)(m_arg1); }
+
+        PMF m_pmf;
+        T*  m_obj;
+        U   m_arg1;
+    };
+
+
+    /* This class is part of the thread internal's implementation, and not
+     * intended for use by users. */
     struct _FuncImpl : public _Impl_base
     {
-        typedef void (*PF)() ;
-        _FuncImpl( PF pf ) : m_pf(pf){ }
-        virtual void _M_run() { m_pf(); }
+        typedef void (*PF)(void*) ;
+
+        _FuncImpl( PF pf, void * m_arg) : m_pf(pf){ }
+        virtual void _M_run() { m_pf(m_arg); }
 
         PF m_pf;
+        void* m_arg;
     };
 
 
   public:
 
-    // template <typename T>
-    // thread( void (T::*pmf)()  , T* obj )
-    //   : m_joinable(true),
-    //     m_callback( new MemberFunctionCallback<T>(pmf, obj))
-    // {
-    //   start_thread();
-    // }
 
-
-    thread( void (*pf)() )
+    thread( void (*pf)(void*), void * arg )
     {
-      start_thread( new _FuncImpl(pf) );
+      start_thread( new _FuncImpl(pf, arg) );
     }
 
 
@@ -147,6 +163,13 @@ class thread
     thread( void (T::*pmf)(), T* obj)
     {
       start_thread( new _MemberImpl<T>(pmf,obj) );
+    }
+
+
+    template <typename T, typename U>
+    thread( void (T::*pmf)(U), T* obj, U user)
+    {
+      start_thread( new _MemberImplUser<T,U>(pmf,obj,user) );
     }
 
     ~thread();
