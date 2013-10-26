@@ -37,7 +37,7 @@ class AdminServerSocket
     /* Start listening on the server socket. */
     void start();
 
-    void log_thread_ids(std::ostream&) const;
+    std::pair<pthread_t, int> thread_ids() const;
 
   private:
 

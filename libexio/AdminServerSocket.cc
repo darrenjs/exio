@@ -212,24 +212,12 @@ void AdminServerSocket::create_listen_socket()
   Listen(m_servfd, 100);
 }
 //----------------------------------------------------------------------
-void AdminServerSocket::log_thread_ids(std::ostream& os) const
-{
-  os << "accept, " << m_threadid
-     << ", " << m_pthreadid;
-}
-//----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
   create_listen_socket();
 
   m_threadid  = syscall(SYS_gettid);
   m_pthreadid = pthread_self();
-  std::ostringstream os;
-  os << "Server socket thread starting, thread: ";
-
-  log_thread_ids( os );
-
-  _INFO_(m_aii->appsvc().log(), os.str() );
 
   _INFO_(m_aii->appsvc().log(),
          "Listening on port " << m_aii->appsvc().conf().server_port);
@@ -337,10 +325,14 @@ void AdminServerSocket::accept_TEP()
     // that we don't sleep at module startup; ie, as soon as this class is
     // instantiated, we are listening for incoming connections without delay.
     //
+    // Another reason we need this is to prevent the accrual of too many
+    // threads, since each thread takes up a lot of stack memory (eg 8MB).
+    //
     // The sleep value is now chosen to a few tens of ms.  This should offer
     // protection against rapid access, and, is not to noticable for normal
     // user interaction.
-    usleep( 25000 );
+
+    usleep( 50000 );
   } // while
 
 
@@ -353,6 +345,15 @@ void AdminServerSocket::start()
 {
   cpp11::thread thr(&AdminServerSocket::accept_TEP, this);
   thr.detach();
+}
+
+//----------------------------------------------------------------------
+std::pair<pthread_t, int> AdminServerSocket::thread_ids() const
+{
+  std::pair<pthread_t, int> t;
+  t.first  = m_pthreadid;
+  t.second = m_threadid;
+  return t;
 }
 
 //----------------------------------------------------------------------
