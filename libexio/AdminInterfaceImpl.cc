@@ -1335,30 +1335,24 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
 
   if (sections.empty() or (sections.count("threads")==1))
   {
-    os << "server-socket: ";
-    m_serverSocket.log_thread_ids(os); os << "\n";
+    os << "thread, lwp, pthread\n";
+
+    std::pair<pthread_t, int> serverthr = m_serverSocket.thread_ids();
+    os << "server_socket_accept, "
+       << serverthr.second << std::dec << ", 0x"
+       << std::hex << serverthr.first << std::dec << "\n";
+
+    const std::vector< std::pair<pthread_t,int> > & rthreads
+      = m_reactor->thread_ids();
+    os << "reactor_io, "
+       << rthreads[0].second << ", 0x"
+       << std::hex << rthreads[0].first << std::dec << "\n";
+    for (size_t n = 1; n < rthreads.size(); n++)
     {
-      cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-
-      bool append_delim = false;
-      for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
-      {
-        if (m_sessions.reg[i].used())
-        {
-          if (append_delim) os << "\n";
-          os << "session " << m_sessions.reg[i].ptr->id() << ": ";
-          m_sessions.reg[i].ptr->log_thread_ids(os);
-          append_delim = true;
-        }
-      }
-
-      //   for (std::map<SID,AdminSession*>::iterator iter = m_sessions.items.begin();
-      //        iter != m_sessions.items.end(); ++iter)
-      //   {
-      //     if (iter != m_sessions.items.begin()) os << "\n";
-      //     os << "session " << iter->first << ": ";
-      //     iter->second->log_thread_ids(os);
-      //   }
+      if (n != 1) os << "\n";
+      os << "reactor_inbound_"<<n<<", "
+         << rthreads[n].second << ", 0x"
+         << std::hex << rthreads[n].first << std::dec;
     }
   }
 
