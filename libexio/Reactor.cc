@@ -186,7 +186,8 @@ Reactor::Reactor(LogService* log, int nworkers)
     m_is_stopping(false),
     m_last_cleanup(0),
     m_notifq(NULL),
-    m_io(NULL)
+    m_io(NULL),
+    m_thr_ids(1+nworkers)
 {
 
   m_pipefd[0]=-1;  // reader
@@ -207,9 +208,10 @@ Reactor::Reactor(LogService* log, int nworkers)
   m_notifq = new ReactorNotifQ(m_pipefd[0], m_pipefd[1]);
 
   /* create internal threads last as last step of object construction */
+
   for (int i = 0; i < nworkers; i++)
   {
-    m_workers.push_back( new cpp11::thread(&Reactor::worker_TEP, this)  );
+    m_workers.push_back( new cpp11::thread(&Reactor::worker_TEP, this, i)  );
   }
 
   m_io = new cpp11::thread(&Reactor::reactor_io_TEP, this);
@@ -278,7 +280,7 @@ Reactor::~Reactor()
   {
     xlog_write1("Reactor::~Reactor  --> deleting a client", __FILE__, __LINE__);
     ReactorClient* client = *iter;
-    client->handle_shutdown();
+    // client->handle_shutdown();
     client->handle_close();
     delete client;
   }
@@ -288,6 +290,9 @@ Reactor::~Reactor()
 //----------------------------------------------------------------------
 void Reactor::reactor_io_TEP()
 {
+  m_thr_ids[0].first  = pthread_self();
+  m_thr_ids[0].second = syscall(SYS_gettid);
+
   while ( m_is_stopping == false)
   {
     try
@@ -417,6 +422,10 @@ void Reactor::reactor_main_loop()
         ReactorClient*   ptr       = fdmap[ iter->fd ];
         int              revents   = iter->revents;
         ReactorClient::IOState  iost = ReactorClient::IO_default;
+
+
+        // TODO: bug in here.  iost can be overrwritten by a POLLOUT event,
+        // after the POLLIN event has been called.
 
         if (revents bitand POLLIN)
         {
@@ -691,14 +700,14 @@ void Reactor::attend_clients()
 
     int const attn = client->attn_flag();
 
-    if ( (attn & (ReactorClient::eWantShutdown|ReactorClient::eShutdownDone))
-         == ReactorClient::eWantShutdown)
-    {
-      if (client->io_open())
-      {
-        client->handle_shutdown();
-      }
-    }
+    // if ( (attn & (ReactorClient::eWantShutdown|ReactorClient::eShutdownDone))
+    //      == ReactorClient::eWantShutdown)
+    // {
+    //   if (client->io_open())
+    //   {
+    //     client->handle_shutdown();
+    //   }
+    // }
 
     if (attn bitand ReactorClient::eWantDelete)
     {
@@ -710,9 +719,11 @@ void Reactor::attend_clients()
 }
 
 //----------------------------------------------------------------------
-
-void Reactor::worker_TEP()
+void Reactor::worker_TEP(int index)
 {
+  m_thr_ids[index+1].first  = pthread_self();
+  m_thr_ids[index+1].second = syscall(SYS_gettid);
+
   while(true)
   {
     try
@@ -803,7 +814,12 @@ bool Reactor::worker_TEP_impl()
   return false;
 }
 
+//----------------------------------------------------------------------
 
+const std::vector< std::pair<pthread_t,int> >& Reactor::thread_ids() const
+{
+  return m_thr_ids;
+}
 
 //----------------------------------------------------------------------
 

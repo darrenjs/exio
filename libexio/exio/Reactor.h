@@ -50,6 +50,7 @@ class Reactor
 
     void invalidate();
 
+    const std::vector< std::pair<pthread_t,int> >& thread_ids() const;
 
   private:
     Reactor(const Reactor&); // no copy
@@ -58,7 +59,7 @@ class Reactor
     void reactor_main_loop();
     void reactor_io_TEP();
 
-    void worker_TEP();
+    void worker_TEP(int index);
     bool worker_TEP_impl();
 
     void handle_reactor_msg(const ReactorMsg&);
@@ -77,18 +78,17 @@ class Reactor
     ReactorNotifQ * m_notifq;
     cpp11::thread * m_io;
 
-
     struct RunQ
     {
         cpp11::mutex                  mutex;
-        std::list <ReactorClient* >  items;
+        std::list <ReactorClient* >   items;
         size_t                        itemcount;
         cpp11::condition_variable     cond;
         RunQ () : itemcount(0) {}
     } m_runq;
 
-
     std::vector<cpp11::thread*> m_workers;
+    std::vector< std::pair<pthread_t,int> > m_thr_ids;    // 0 is reactor
 };
 
 } // namespace exio
