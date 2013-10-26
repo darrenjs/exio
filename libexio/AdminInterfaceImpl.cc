@@ -113,7 +113,8 @@ AdminInterfaceImpl::AdminInterfaceImpl(AdminInterface * ai)
                           adminattrs) );
 
   admin_add( AdminCommand("diags",
-                          "dump exio diagnostics", "obtain internal state of the libexio library used the application",
+                          "dump exio diagnostics",
+                          "diags [sessions|threads|tables]",
                           &AdminInterfaceImpl::admincmd_diags, this,
                           adminattrs) );
 
