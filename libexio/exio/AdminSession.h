@@ -99,8 +99,6 @@ class Reactor;
 
     bool logon_recevied() const { return m_logon_received; }
 
-    void log_thread_ids(std::ostream&) const;
-
     int fd() const;
 
     // IO stats
