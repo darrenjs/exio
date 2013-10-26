@@ -155,9 +155,6 @@ class Client : public ReactorClient
     /* Queue data to send  / close socket */
     int queue(const char*, size_t, bool request_close = false);
 
-    int       task_lwp() const { return 0; }
-    pthread_t task_tid() const { return 0; }
-
     size_t pending_out() const;
 
     // TODO: add pending_in() method.  Little more tricky, because pending
