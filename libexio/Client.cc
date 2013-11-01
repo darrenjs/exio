@@ -614,13 +614,14 @@ ReactorClient::IOState Client::handle_output() /* REACTOR THREAD */
         m_out_q.items.erase( m_out_q.items.begin() );
         m_out_q.itemcount--;
 
-        // TODO: concern here is that we might end up, via the Reactor,
-        // calling close() on a socket fd too quickly after writing our last
-        // data item.  A well know problem with socket IO is that this rapid
+        // Concern here is that we might end up, via the Reactor, calling
+        // close() on a socket fd too quickly after writing our last data
+        // item.  A well know problem with socket IO is that this rapid
         // close() after write() can cause the most final bytes written to not
         // be transmitted. So now we have put the shutdown in; however, might
-        // need to go further an introduction some kind of lifecycle for
-        // closing a socket.
+        // need to go further an introduction some kind of lifecycle; eg give
+        // the client a 1 second oppurtunity to perform the close. Or, have a
+        // SAM logoff message.
 
         // initial shutdown request
         do_shutdown_SHUT_WR();
@@ -635,7 +636,7 @@ ReactorClient::IOState Client::handle_output() /* REACTOR THREAD */
     const int flags = MSG_DONTWAIT bitor MSG_NOSIGNAL;
 
     size_t const wlen = next->size;
-    ssize_t n = send(fd(), next->ptr, wlen , flags);
+    ssize_t n = ::send(fd(), next->ptr, wlen , flags);
     int const _err = errno;
 
     try {
@@ -702,11 +703,8 @@ void Client::handle_close()   /* REACTOR THREAD */
     xlog_write1("::close(fd())", __FILE__, __LINE__);
     ::close(fd());
 
-    // request stop of the task thread (which invokes the derived-class
-    // callback to notify of closure).
-    //request_task_thread_stop();
 
-    // TODO: need to get the attention of a worker thread. Lets try by pushing
+    // Need to get the attention of a worker thread. Lets try by pushing
     // data onto the fifo; then the reactor should see that we have work to
     // do.
     {
@@ -720,14 +718,14 @@ void Client::handle_close()   /* REACTOR THREAD */
 void Client::release() /* ARBITRARY-CLIENT THREAD or WORKER THREAD */
 {
   xlog_write1("Client::release", __FILE__, __LINE__);
-  _INFO_(m_logsvc, "client: release has been called, fd=" << fd());
 
   {
+    // set m_cb to null to prevent any more callbacks to the client code
     cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
     m_cb = NULL;
   }
 
-  // call shutdown immediately, so that this is minimal delay to terminating
+  // call shutdown immediately, so that there is minimal delay to terminating
   // the underlying IO communication.
   do_shutdown_SHUT_WR();
 
@@ -764,7 +762,6 @@ bool Client::has_work()
 //----------------------------------------------------------------------
 void Client::do_work()
 {
-  xlog_write1("Client::do_work", __FILE__, __LINE__);
   {
     cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
     if (m_cb == NULL)
@@ -864,8 +861,6 @@ void Client::do_work()
       cpp11::lock_guard<cpp11::recursive_mutex> guard( m_cb_mtx );
       if (m_cb)
       {
-        xlog_write1("Client::do_work  --> m_cb->process_close", __FILE__, __LINE__);
-
         try
         {
           m_cb->process_close(this);

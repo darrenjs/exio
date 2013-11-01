@@ -46,9 +46,9 @@ namespace exio {
 class ReactorClient
 {
   public:
-    enum IOState { IO_default = 0,
-                   IO_close,
-                   IO_read_again };
+    enum IOState { IO_default      = 0x0,
+                   IO_close        = 0x1,
+                   IO_read_again   = 0x2 };
   public:
 
     ReactorClient(Reactor* r, int fd);

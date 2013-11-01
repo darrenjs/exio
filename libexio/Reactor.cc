@@ -25,11 +25,6 @@
 #include "exio/utils.h"
 #include "exio/Logger.h"
 
-extern "C"
-{
-  #include <xlog/xlog.h>
-}
-
 #include <sstream>
 #include <algorithm>
 #include <map>
@@ -110,32 +105,8 @@ class ReactorNotifQ
     {
     }
 
-    // TODO: is there a race condition in here, ie. the condition pushing of a
-    // eNoEvent?
-
-    // TODO: remove inline
-
-    // TODO: don't even take the lock, if its NoEvent, and something is
-    // pending.  Is that possible?
-
-    // TODO: use raw pthreads
-
-    // TODO: run this code in isolation
-
-    // TODO: try to exhause the dequeue ... or see how it can fail
-
-    // TODO: alter the c++11 stuff, to avoid inlines come in the constructor
-    // and destructor.
-
-    // TODO: whatever I try, need to keep track of the versions.
-
-    // TODO: make the m_mutex in here get corrupted?
     void push_msg(const ReactorMsg& m)
     {
-      // void* ptr = xlog_get_row1(__FILE__, __LINE__);
-      // xlog_append_cstr(ptr, "push_msg:");
-      // xlog_append_cstr(ptr, ReactorMsg::str(m.type));
-
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
 
       // if there are queued items, then we don't need to push another
@@ -155,9 +126,6 @@ class ReactorNotifQ
 
     void pull(std::deque<ReactorMsg>& dest)
     {
-      // void* ptr = xlog_get_row1(__FILE__, __LINE__);
-      // xlog_append_cstr(ptr, "-->poll:");
-
       dest.clear();
       cpp11::lock_guard<cpp11::mutex> guard( m_mutex );
       m_pending.swap( dest );
@@ -165,10 +133,6 @@ class ReactorNotifQ
       // drain pipe
       char buf[1024];
       while (read(m_pipein, buf, sizeof(buf))>0) { }
-
-      // ptr = xlog_get_row1(__FILE__, __LINE__);
-      // xlog_append_cstr(ptr, "-->poll: dest.size()=");
-      // xlog_append_uint(ptr, dest.size());
     }
 
   private:
@@ -221,23 +185,8 @@ Reactor::Reactor(LogService* log, int nworkers)
 /* Destructor */
 Reactor::~Reactor()
 {
-  xlog_write1("Reactor::~Reactor", __FILE__, __LINE__);
-  // // wait until all clients removed - note, we are not doing anything clever
-  // // like deleting the clients on demand, or setting a flag that the reactor
-  // // is no invalid. It is up to the user application to ensure the reactor is
-  // // deleted in a coordinated fashion.
-  // {
-  //   cpp11::unique_lock<cpp11::mutex> guard(m_clients.lock);
-  //   while(m_clients.ptrs.empty()==false or m_clients.ptrs.size()>0)
-  //   {
-  //     m_clients.ptrs_empty.wait (guard);
-  //   }
-  // }
-
-
   /* Stop reactor thread */
   m_is_stopping = true;
-  xlog_write1("pushing termiante thread", __FILE__, __LINE__);
   m_notifq->push_msg(ReactorMsg(ReactorMsg::eTerminate));
 
   // Ensure our thread has been joined. Note: it is criticaly important that
@@ -250,12 +199,11 @@ Reactor::~Reactor()
   delete m_io;
   delete m_notifq;
 
-  // TODO: have decided to shut down workers after the reactor. This is
-  // because the reactor is a source of input for the workers, so once the
-  // reactor has shutdown, the workers cannot get anymore work.
+  // I have decided to shut down workers after the reactor. This is because
+  // the reactor is a source of input for the workers, so once the reactor has
+  // shutdown, the workers cannot get anymore work.
 
   /* shutdown worker threads */
-  xlog_write1("joining worker threads", __FILE__, __LINE__);
   {
     cpp11::lock_guard<cpp11::mutex> guard( m_runq.mutex );
     m_runq.items.push_back(NULL);
@@ -278,7 +226,6 @@ Reactor::~Reactor()
   for (std::vector<ReactorClient*>::iterator iter = m_clients.begin();
        iter != m_clients.end(); ++iter)
   {
-    xlog_write1("Reactor::~Reactor  --> deleting a client", __FILE__, __LINE__);
     ReactorClient* client = *iter;
     // client->handle_shutdown();
     client->handle_close();
@@ -333,7 +280,7 @@ void Reactor::reactor_main_loop()
     fdset.push_back( pfd );
 
     // TODO: I should only need to build the fdset and fdmap when a client is
-    // added or removed.  The only think I need to do each time is just call
+    // added or removed.  The only thing I need to do each time is just call
     // events() to get the state of each client.
     {
 //      cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
@@ -379,10 +326,7 @@ void Reactor::reactor_main_loop()
     // death-cycle .. if so, need a timeout. Choose a 1 second interval.
     int timeout = (!m_destroying.empty() || m_destroying.size())? 1000:-1;
 
-//    xlog_write1("poll-in", __FILE__, __LINE__);
-    int nready = poll(&fdset[0], fdset.size(), timeout);
-    xlog_write1("reactor: out of poll", __FILE__, __LINE__);
-//    xlog_write1("poll-out", __FILE__, __LINE__);
+    int nready = ::poll(&fdset[0], fdset.size(), timeout);
 
     // TODO: move this logging to a separate function
     // {
@@ -421,7 +365,7 @@ void Reactor::reactor_main_loop()
 
         ReactorClient*   ptr       = fdmap[ iter->fd ];
         int              revents   = iter->revents;
-        ReactorClient::IOState  iost = ReactorClient::IO_default;
+        int              iost      = ReactorClient::IO_default;
 
 
         // TODO: bug in here.  iost can be overrwritten by a POLLOUT event,
@@ -429,32 +373,25 @@ void Reactor::reactor_main_loop()
 
         if (revents bitand POLLIN)
         {
-          //void * rp = xlog_write1("POLLIN fd=", __FILE__, __LINE__);
-          //xlog_append_sint(rp,iter->fd);
-          if (ptr->io_open()) iost = ptr->handle_input();
+          if (ptr->io_open()) iost or_eq ptr->handle_input();
         }
 
         if (revents bitand POLLPRI) { /* don't handle POLLPRI */ }
 
         if (revents bitand POLLOUT)
         {
-          //void * rp = xlog_write1("POLLOUT fd=", __FILE__, __LINE__);
-          //xlog_append_sint(rp,iter->fd);
-          if (ptr->io_open()) iost = ptr->handle_output();
+          if (ptr->io_open()) iost or_eq ptr->handle_output();
         }
 
         if ( (((revents bitand POLLRDHUP) or
-               (revents bitand POLLERR) or
-               (revents bitand POLLHUP) or
-               (revents bitand POLLNVAL)) and
-              iost != ReactorClient::IO_read_again)
-             or (iost==ReactorClient::IO_close) )
+               (revents bitand POLLERR)   or
+               (revents bitand POLLHUP)   or
+               (revents bitand POLLNVAL))
+              and
+              ((iost bitand ReactorClient::IO_read_again) == 0))
+//              iost != ReactorClient::IO_read_again)
+             or (iost bitand ReactorClient::IO_close) )
         {
-//          xlog_write1("poll detected file close, calling ptr->handle_close()", __FILE__, __LINE__);
-
-          //void * rp = xlog_write1("POLLEND fd=", __FILE__, __LINE__);
-          //xlog_append_sint(rp,iter->fd);
-          _INFO_(m_log, "reactor: poll detected close");
           ptr->handle_close();
         }
       }
@@ -471,8 +408,6 @@ void Reactor::reactor_main_loop()
 
     }
 
-
-
     /* search for clients with work to do */
     // TODO: this can be made more efficient, based on the earlier IO
     for (std::vector<ReactorClient*>::iterator it = m_clients.begin();
@@ -484,12 +419,9 @@ void Reactor::reactor_main_loop()
       char newstate;
 
       client->update_run_state_for_reactor(oldstate, newstate);
-      //_INFO_(m_log, "reactor: oldstate=" << oldstate << ", newstate=" << newstate << " for, fd " << client->fd());
 
       if (oldstate=='N' and newstate=='Q')
       {
-        //xlog_write1("queuing a client for worker", __FILE__, __LINE__);
-        //_INFO_(m_log, "reactor: pusing client onto Q, fd " << client->fd());
         cpp11::lock_guard<cpp11::mutex> guard( m_runq.mutex );
         m_runq.items.push_back(client);
         m_runq.itemcount++;
@@ -498,8 +430,6 @@ void Reactor::reactor_main_loop()
       }
     }
 
-
-
     /* Destruction cycle */
     time_t now = ::time(NULL);
     std::set<ReactorClient*> deletenow;
@@ -507,7 +437,6 @@ void Reactor::reactor_main_loop()
         (   ((now > m_last_cleanup) and ((now-m_last_cleanup)>2))
          or (now < m_last_cleanup) ))
     {
-      //xlog_write1("reactor: cleanup routine starting", __FILE__, __LINE__);
       m_last_cleanup = now;
 
       for (std::set<ReactorClient*>::iterator it = m_destroying.begin();
@@ -524,10 +453,6 @@ void Reactor::reactor_main_loop()
           if (client->get_run_state() == 'N')
           {
             deletenow.insert(client);
-          }
-          else
-          {
-            xlog_write1("reactor: cleanup --> postpone delete for client, not N", __FILE__, __LINE__);
           }
         }
       }
@@ -549,10 +474,7 @@ void Reactor::reactor_main_loop()
            it != deletenow.end(); ++it)
       {
         ReactorClient* client = *it;
-
         m_destroying.erase(*it);
-
-        xlog_write1("reactor: cleanup --> calling delete", __FILE__, __LINE__);
         delete client;
       }
     }
@@ -575,7 +497,6 @@ void Reactor::invalidate()
 
 // void Reactor::request_close(ReactorClient* client)
 // {
-//   xlog_write1("request_close", __FILE__, __LINE__);
 //   ReactorMsg msg(ReactorMsg::eClose, client);
 //   m_notifq->push_msg(msg);
 // }
@@ -602,7 +523,6 @@ void Reactor::invalidate()
 
 void Reactor::add_client(ReactorClient* client)
 {
-  _DEBUG_(m_log, "reactor: request to add new client, fd " << client->fd());
   ReactorMsg msg(ReactorMsg::eAdd, client);
   m_notifq->push_msg(msg);
 }
@@ -619,20 +539,16 @@ void Reactor::request_attn()
 
 void Reactor::handle_reactor_msg(const ReactorMsg& msg)
 {
-//  xlog_write1("ReactorMsg::handle_reactor_msg", __FILE__, __LINE__);
   switch(msg.type)
   {
     case ReactorMsg::eNoEvent  : break;
     // case ReactorMsg::eClose      :
     // {
-    //   xlog_write1("ReactorMsg::eClose", __FILE__, __LINE__);
-    //   xlog_write1("msg.ptr->handle_close()", __FILE__, __LINE__);
     //   msg.ptr->handle_close();
     //   break;
     // }
     // case ReactorMsg::eShutdown     :
     // {
-    //   xlog_write1("ReactorMsg::eShutdown", __FILE__, __LINE__);
     //   if (msg.ptr->io_open())
     //   {
     //     _DEBUG_(m_log, "reactor: shutdown(fd=" << msg.ptr->fd() << ", SHUT_WR)");
@@ -645,31 +561,9 @@ void Reactor::handle_reactor_msg(const ReactorMsg& msg)
     // }
     case ReactorMsg::eAdd :
     {
-      xlog_write1("ReactorMsg::eAdd", __FILE__, __LINE__);
-//      cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
       m_clients.push_back( msg.ptr );
-      _DEBUG_(m_log, "reactor: added new client, fd " << msg.ptr->fd()
-              << ", total clients " << m_clients.size());
       break;
     }
-    // case ReactorMsg::eRelease :
-    // {
-    //   xlog_write1("ReactorMsg::eRelease", __FILE__, __LINE__);
-
-    //   msg.ptr->m_release_count = 1; // mark as released
-
-    //   cpp11::lock_guard<cpp11::mutex> guard(m_clients.lock);
-
-    //   _DEBUG_(m_log, "reactor: destroying client, fd " << msg.ptr->fd());
-
-    //   std::vector<ReactorClient*>::iterator it
-    //     = std::find(m_clients.ptrs.begin(), m_clients.ptrs.end(), msg.ptr);
-    //   if (it != m_clients.ptrs.end()) m_clients.ptrs.erase(it);
-    //   delete msg.ptr;
-
-    //   if (m_clients.ptrs.size() == 0) m_clients.ptrs_empty.notify_all();
-    //   break;
-    // }
     case ReactorMsg::eTerminate :
     {
       m_is_stopping = true; //normally already set
@@ -785,9 +679,7 @@ bool Reactor::worker_TEP_impl()
     m_runq.itemcount--;
   }
 
-  // work on the client while there is data
-
-  _INFO_(m_log, "worker thread got work, fd=" << client->fd());
+  // work on the client while it has pending inbound data
   client->set_run_state();
   while (true)
   {
