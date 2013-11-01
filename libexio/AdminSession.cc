@@ -408,7 +408,6 @@ void AdminSession::io_onmsg(const sam::txMessage& msg)
 
 void AdminSession::process_close(Client*)  // callback, from IO
 {
-  _INFO_(m_appsvc.log(), "AdminSession:process_close");
   m_session_valid = false;
 
   m_listener->session_closed( *this );
