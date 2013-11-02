@@ -14,15 +14,15 @@
 ## along with this program; if not, write to the Free Software
 ## Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-#XLOGHOME=/home/darrens/work/dev/src/c++/xlog/install
+XLOGHOME=/home/darrens/work/dev/src/c++/xlog/install
 
 # NOTE: AM_CPPFLAGS is ignored in preference to a per-executable (or
 # per-library) _CPPFLAGS variable if it is defined
 #
 # NOTE: it is not good practice to add "-Wall" and "-03" etc here.  Those
 # choices should be made by the user when they invoke the configure script.
-#AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb  -I$(XLOGHOME)/include
-AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb
+AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb  -I$(XLOGHOME)/include
+#AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb
 
 # Primary defination of our shared library to be created.  Notice the
 # _LTLIBRARIES key: automake is looking specifically for this pattern and then
@@ -39,7 +39,7 @@ nobase_include_HEADERS = exio/AdminInterface.h exio/sam.h exio/AdminCommand.h ex
 
 # List the sources for an individual library
 libexio_la_SOURCES = AdminCommand.cc AdminInterface.cc AdminServerSocket.cc		\
-AdminSession.cc sam.cc utils.cc AdminIO.cc TableSerialiser.cc TableEvents.cc	\
+AdminSession.cc sam.cc utils.cc TableSerialiser.cc TableEvents.cc	\
 Table.cc Monitor.cc AppSvc.cc AdminInterfaceImpl.cc SamBuffer.cc Reactor.cc		\
 Client.cc ReactorReadBuffer.cc
 
@@ -65,4 +65,4 @@ libexio_la_LIBADD  = ../libcpp11/libcpp11.la
 # - AGE: indicates compatibilty with previous version of the shlib.
 #
 #libexio_la_LDFLAGS = -L$(XLOGHOME)/lib -lxlog  -version-info 1:6:0
-libexio_la_LDFLAGS =  -version-info 1:7:0
+libexio_la_LDFLAGS =  -version-info 1:7:0 -L$(XLOGHOME)/lib -lxlog
