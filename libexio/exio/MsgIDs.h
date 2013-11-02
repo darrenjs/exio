@@ -29,6 +29,7 @@ namespace id  /* identifiers */
   static const std::string admincount     = "admincount";
   static const std::string adminset       = "adminset";
   static const std::string alert_type     = "alert_type";
+  static const std::string alert_id       = "alert_id";
   static const std::string args_COUNT     = "args_COUNT";
   static const std::string args_prefix    = "args_";
   static const std::string autoclose      = "autoclose";
@@ -58,6 +59,7 @@ namespace id  /* identifiers */
   static const std::string rows           = "rows";
   static const std::string scalarlist     = "scalarlist";
   static const std::string serviceid      = "serviceid";
+  static const std::string severity       = "severity";
   static const std::string shorthelp      = "short";
   static const std::string snapi          = "snapi";
   static const std::string snapn          = "snapn";

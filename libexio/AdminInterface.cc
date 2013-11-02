@@ -159,12 +159,16 @@ void AdminInterface::add_columns(const std::string& table_name,
 void AdminInterface::monitor_alert(const std::string& source,
                                    const std::string& source_type,
                                    const std::string& error_str,
-                                   const std::string& alert_type)
+                                   const std::string& alert_type,
+                                   const std::string& alert_id,
+                                   const std::string& severity)
 {
   m_impl->monitor_alert(source,
                         source_type,
                         error_str,
-                        alert_type);
+                        alert_type,
+                        alert_id,
+                        severity);
 }
 
 //----------------------------------------------------------------------

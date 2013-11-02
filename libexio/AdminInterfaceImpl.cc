@@ -1172,7 +1172,9 @@ void AdminInterfaceImpl::copy_row(const std::string& tablename,
 void AdminInterfaceImpl::monitor_alert(const std::string& source,
                                        const std::string& source_type,
                                        const std::string& error_str,
-                                       const std::string& alert_type)
+                                       const std::string& alert_type,
+                                       const std::string& alert_id,
+                                       const std::string& severity)
 {
   sam::txMessage msg(id::msg_alert);
   msg.root().put_field(id::QN_msgtype, id::msg_alert);
@@ -1182,6 +1184,8 @@ void AdminInterfaceImpl::monitor_alert(const std::string& source,
   body.put_field(id::source_type, source_type);
   body.put_field(id::error, error_str);
   body.put_field(id::alert_type, alert_type);
+  body.put_field(id::alert_id, alert_id);
+  body.put_field(id::severity, severity);
 
   send_all(msg);
 }

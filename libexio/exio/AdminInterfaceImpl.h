@@ -160,7 +160,9 @@ class AdminInterfaceImpl : public AdminSession::Listener
     void monitor_alert(const std::string& source,
                        const std::string& source_type,
                        const std::string& error_str,
-                       const std::string& alert_type);
+                       const std::string& alert_type,
+                       const std::string& alert_id,
+                       const std::string& severity);
 
     /* ----- Lifetime ----- */
     void start();

@@ -27,10 +27,16 @@ namespace exio
 {
 
 class AdminInterfaceImpl;
-
-
 class AdminInterface;
 
+/* Commonly used alert severity codes - note, leading two digits are the Alert
+ * Severity Rating (ASR) */
+static std::string const SEV_CRITICAL = "70-critical";
+static std::string const SEV_HIGH     = "60-high";
+static std::string const SEV_MODERATE = "50-moderate";
+static std::string const SEV_LOW      = "40-low";
+static std::string const SEV_INFO     = "30-info";
+static std::string const SEV_DEBUG    = "20-debug";
 
 class AdminInterface
 {
@@ -119,12 +125,22 @@ class AdminInterface
                              const std::string& column,
                              const sam::txContainer& meta);
 
+    /* Alerting
+     *
+     * Standard codes for severity:
+     *
+     * SEV_CRITICAL
+     * SEV_HIGH
+     * SEV_MODERATE   <- default
+     * SEV_LOW
+     * SEV_INFO / SEV_DEBUG    <- use for non-alerts
+     */
     void monitor_alert(const std::string& source,
                        const std::string& source_type,
-                       const std::string& error_str,
-                       const std::string& alert_type);
-
-
+                       const std::string& error_message,
+                       const std::string& alert_type = "",
+                       const std::string& alert_id = "",
+                       const std::string& severity = SEV_MODERATE);
 
   private:
 
