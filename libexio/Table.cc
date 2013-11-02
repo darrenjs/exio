@@ -641,39 +641,37 @@ void DataTable::snapshot()
 }
 //----------------------------------------------------------------------
 
-  // HERE
-void DataTable::_nolock_send_snapshopt_as_single_msg(const SID& session)
-{
-  /* NOTE: this method assumes the table-lock is held before entry */
+// void DataTable::_nolock_send_snapshopt_as_single_msg(const SID& session)
+// {
+//   /* NOTE: this method assumes the table-lock is held before entry */
 
-  /* NOTE: this is a legacy method */
+//   /* NOTE: this is a legacy method */
 
-  // TODO: here, should also send the tabledescr and embedded admins too.  See
-  // toward top of file, where this is called, that site also dopes publish
-  // the tabledescr.
+//   // TODO: here, should also send the tabledescr and embedded admins too.  See
+//   // toward top of file, where this is called, that site also dopes publish
+//   // the tabledescr.
 
-  // serialise table content
-  SnapshotSerialiser serial;
-  serial.set_table_name( m_table_name );
+//   // serialise table content
+//   SnapshotSerialiser serial;
+//   serial.set_table_name( m_table_name );
 
-  for( std::vector< DataRow >::iterator iter=m_rows.begin();
-       iter != m_rows.end(); ++iter)
-  {
-    const MetaForCol* meta = NULL;
+//   for( std::vector< DataRow >::iterator iter=m_rows.begin();
+//        iter != m_rows.end(); ++iter)
+//   {
+//     const MetaForCol* meta = NULL;
 
-    PCMD::const_iterator rowpcmd = m_pcmd.find(iter->rowkey());
-    if (rowpcmd != m_pcmd.end())
-    {
-      meta = &(rowpcmd->second);
-    }
+//     PCMD::const_iterator rowpcmd = m_pcmd.find(iter->rowkey());
+//     if (rowpcmd != m_pcmd.end())
+//     {
+//       meta = &(rowpcmd->second);
+//     }
 
-    serial.add_row(*iter, meta);
-  }
-  m_ai->send_one(serial.message(), session);
-}
+//     serial.add_row(*iter, meta);
+//   }
+//   m_ai->send_one(serial.message(), session);
+// }
 
 //----------------------------------------------------------------------
-  // HERE
 void DataTable::_nolock_send_snapshopt(const SID& session)
 {
   /* NOTE: this method assumes the table-lock is held before entry */

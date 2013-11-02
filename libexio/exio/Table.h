@@ -196,7 +196,7 @@ class DataTable
     void _nolock_publish_update(std::list<TableEventPtr>&);
 
     void _nolock_send_snapshopt(const SID&);
-    void _nolock_send_snapshopt_as_single_msg(const SID&);
+    //void _nolock_send_snapshopt_as_single_msg(const SID&);
 
     void add_column_NOLOCK(const std::string & column,
                            std::list<TableEventPtr>& events);
