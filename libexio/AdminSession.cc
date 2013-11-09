@@ -69,6 +69,23 @@ struct QueuedItem
 };
 
 
+QueuedItem::QueuedItem()
+  :  size(0),
+     flags(0)
+{
+}
+
+const char* QueuedItem::buf() const
+{
+  return m_sb.msg_start();
+}
+
+void QueuedItem::release()  // better to just use the constructor?
+{
+  size  = 0;
+  flags = 0;
+}
+
 SID SID::no_session = SID();
 
 
