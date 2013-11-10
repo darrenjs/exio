@@ -26,10 +26,10 @@
 #include "exio/SamBuffer.h"
 #include "exio/Reactor.h"
 
-extern "C"
-{
-#include <xlog/xlog.h>
-}
+// extern "C"
+// {
+// #include <xlog/xlog.h>
+// }
 
 #include "mutex.h"
 
@@ -251,7 +251,7 @@ void AdminSession::init(Reactor* reactor)
 //----------------------------------------------------------------------
 AdminSession::~AdminSession()
 {
-  xlog_write1("AdminSession::~AdminSession", __FILE__, __LINE__);
+//  xlog_write1("AdminSession::~AdminSession", __FILE__, __LINE__);
 
   // TODO: need mutex protection around m_io_handle.  Well, probably is ok,
   // since the write is done in the destructor, ie, should be no more method
@@ -353,7 +353,7 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
 void AdminSession::close()
 {
-  xlog_write1("AdminSession::close", __FILE__, __LINE__);
+  //xlog_write1("AdminSession::close", __FILE__, __LINE__);
   if (m_io_handle) m_io_handle->queue(0,0,true);
 }
 

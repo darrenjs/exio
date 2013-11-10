@@ -4,10 +4,10 @@
 #include "exio/AppSvc.h"
 #include "exio/Reactor.h"
 
-extern "C"
-{
-#include <xlog/xlog.h>
-}
+// extern "C"
+// {
+// #include <xlog/xlog.h>
+// }
 
 #include <errno.h>
 #include <poll.h>
@@ -196,7 +196,7 @@ int ReactorClient::destroy_cycle(time_t t)
     }
     else
     {
-      xlog_write1("ReactorClient::destroy_cycle --- READY TO DELETE!", __FILE__, __LINE__);
+      //xlog_write1("ReactorClient::destroy_cycle --- READY TO DELETE!", __FILE__, __LINE__);
       return 1;  // ready to delete
     }
   }
@@ -235,15 +235,15 @@ Client::Client(Reactor* reactor,
 
   // Danger: creation of internal thread should be last action of constructor,
   // so that object construction is complete before accessed by thread.
-  xlog_incr(0);
-  xlog_cntr_label(0, "Client");
+  //xlog_incr(0);
+  //xlog_cntr_label(0, "Client");
 }
 
 //----------------------------------------------------------------------
 /* Destructor */
 Client::~Client()   /* REACTOR THREAD */
 {
-  xlog_write1("Client::~Client", __FILE__, __LINE__);
+  //xlog_write1("Client::~Client", __FILE__, __LINE__);
   // TODO: we have a design problem here: what if self object is destructed on
   // the TASK thread!  This suggests a new design.
 
@@ -269,8 +269,8 @@ Client::~Client()   /* REACTOR THREAD */
   shutdown_outq();
   m_datafifo.items.clear();
 
-  xlog_incr(1);
-  xlog_cntr_label(1, "~Client");
+  //xlog_incr(1);
+  //xlog_cntr_label(1, "~Client");
 }
 //----------------------------------------------------------------------
 void Client::shutdown_outq()
@@ -515,7 +515,7 @@ int Client::events()  /* REACTOR THREAD */
 //----------------------------------------------------------------------
 int Client::queue(const char* buf, size_t size, bool closesocket)
 {
-  xlog_write1("queue", __FILE__, __LINE__);
+  //xlog_write1("queue", __FILE__, __LINE__);
   bool invalidate_reactor = false;
 
   {
@@ -523,7 +523,7 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
 
     if (m_out_q.acceptmore == false)
     {
-      xlog_write1("cannot add more to queue", __FILE__, __LINE__);
+      //xlog_write1("cannot add more to queue", __FILE__, __LINE__);
       return -2;
     }
 
@@ -700,7 +700,7 @@ void Client::handle_close()   /* REACTOR THREAD */
 
     // Note: important that we only make one call to close.
     m_io_closed = true;
-    xlog_write1("::close(fd())", __FILE__, __LINE__);
+    //xlog_write1("::close(fd())", __FILE__, __LINE__);
     ::close(fd());
 
 
@@ -717,7 +717,7 @@ void Client::handle_close()   /* REACTOR THREAD */
 //----------------------------------------------------------------------
 void Client::release() /* ARBITRARY-CLIENT THREAD or WORKER THREAD */
 {
-  xlog_write1("Client::release", __FILE__, __LINE__);
+  //xlog_write1("Client::release", __FILE__, __LINE__);
 
   {
     // set m_cb to null to prevent any more callbacks to the client code
@@ -741,7 +741,7 @@ void Client::release() /* ARBITRARY-CLIENT THREAD or WORKER THREAD */
 
     m_tdestroy  = ::time(NULL);
 
-    xlog_write1("Client::release --> calling request_attn()", __FILE__, __LINE__);
+    //xlog_write1("Client::release --> calling request_attn()", __FILE__, __LINE__);
     if (reactor()) reactor()->request_attn();
   }
 
