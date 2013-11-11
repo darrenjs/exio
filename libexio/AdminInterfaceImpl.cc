@@ -1311,7 +1311,7 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
 
     if (sections.empty() or (sections.count("sessions")==1))
     {
-      os << "SessionID, PeerAddr, fd, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
+      os << "SessionID, fd, PeerAddr, PeerServiceID, User, Logon, Start, LastOut, BytesOut, BytesIn, QueueOut\n";
 
       for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
       {
@@ -1319,8 +1319,8 @@ AdminResponse AdminInterfaceImpl::admincmd_diags(AdminRequest& request)
         AdminSession* sptr = m_sessions.reg[i].ptr;
 
         os << sptr->id() << ", ";
-        os << sptr->peeraddr() << ", ";
         os << sptr->fd() << ", ";
+        os << sptr->peeraddr() << ", ";
         os << sptr->peer_serviceid() << ", ";
         os << sptr->username() << ", ";
         os << sptr->logon_recevied() << ", ";
