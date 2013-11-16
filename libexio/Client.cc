@@ -538,7 +538,11 @@ int Client::queue(const char* buf, size_t size, bool closesocket)
          * sequence on the socket.
          */
 
-        _ERROR_(m_logsvc, "client fd " << fd() << " reached max queue size");;
+        _ERROR_(m_logsvc, "failed to add " << size
+                << " byte message to outbound queue for client fd "
+                << fd() << ". Queue usage: max=" << m_out_pend_max
+                << ", used=" << m_out_q.pending
+                << ", avail=" << (m_out_pend_max - m_out_q.pending));
 
         m_out_q.acceptmore = false;
 

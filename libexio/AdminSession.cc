@@ -294,7 +294,8 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
 
       if (result == -1)
       {
-        _ERROR_(m_appsvc.log(), "Dropping slow consumer session " << m_id);
+        _ERROR_(m_appsvc.log(), "Dropping session " << m_id
+                << " due to enqueue failure");
         return true;
       }
     }
