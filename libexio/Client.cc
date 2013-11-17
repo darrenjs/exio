@@ -229,7 +229,7 @@ Client::Client(Reactor* reactor,
     m_logsvc(log),
     m_log_io_events(true),
     m_cb(cb),
-    m_out_pend_max(20*1024*1024), // TODO: take from config
+    m_out_pend_max(100*1024*1024), // TODO: take from config
     m_buf(4096)
 {
 
