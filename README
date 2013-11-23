@@ -20,6 +20,10 @@ svn copy -m "new release, $NEWVER" --parents  ${SRC} ${DEST}
 cd ~/work/dev/src/c++/exio/branches
 svn co $DEST
 
+# optional export
+svn export $DEST exio-$NEWVER
+chmod -R a-w exio-$NEWVER
+tar cvfz exio-$NEWVER.tar.z
 
 IN PROGRESS
 -----------
