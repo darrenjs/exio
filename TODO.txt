@@ -2,41 +2,102 @@ TODO for libadmin
 =================
 
 
-01/10/13
+01/11/13
+--------
+
+Passed a 7 day run test! So, starting prep for a version cut.
+
+
+
+21/10/13
+--------
+
+Another thing learnt.  Race conditions can often be teased out under high
+load, situations (and, over longer runs, to increase the effective probability
+of them occuring).  Under high load, various thread tasks can slow down, or be
+temporarily suspended, allowing for unexpected situations to occur.  E.g.,
+maybe now it will take seconds for a function to grab a mutex, where normally
+it would have taken nanoseconds; and during this increased interval, maybe the
+object which owns the function has been deleted!
+
+
+
+09/10/13
+--------
+
+New bugs, so cannot productionise this weekend.  Two bug are:
+
+(1) fairly reliable memory leak (RSS is in the GB range!)
+
+(2) core dump on the admin side - client pointer is being pushed onto the
+    notifq, but by the time it is popped and used, the client object has been
+    deleted.
+
 
 ----------------------------------------------------------------------
 Tasks for productionisation in 1 week
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
- /\/\/\ BUGS /\/\/\
-
-* BUG: why is admin command now showing a delay?
-
-* BUG: I think I saw the admin command coming back blank.  Have had this error
-  previously.
-
-* Memory leak?
-
-* Why does admin consume so much CPU power?  Can we profile it to find out
-  why?
-
-* complete functional gaps
-
-  -> complete IO statistics
-
-  -> complete session queue limits and auto-dropping
+- test the large messages with the current GUI; does the GUI support SAM0101?,
+  ie, variable length messages?  I.e.,  a SAM header might be like:
+     {SAM0101:88889017:
 
 
-* develop test scripts, for running admin repeatedly, and capturing output.
 
-* conduct long-runs, with multiple hosts etc.
+- [DONE] review the logging, looking to reduce
+
+- [DONE] Remove xlog
+
+- Review the IO/TODOs.  Are there any which need to be addressed before
+  release?
+
+- [DONE] change poisition of fd() in diags.
+
+- [DONE] review the new alert call; are all addition fields being broadcast?
+
+
+- DEFERRED: add generic server status requests ... think about how to do this.
+      I.e., if we are a server, eg the ximond, can we request that we don't
+      prefer for a connected GUI to perform delta-error alerting?  I.e.,
+      instead the server might be using the alert api, instead of the error
+      field.  However, before I do this, I need to understand how to migrate
+      from the error-field approach.
+
+TEST: slow consumer (maybe write a consumer for this, so we can start lots of
+      them). exio should detect failure to queue an outbound message; then it
+      will no longer queue messages for that client (thus preventing memory
+      growth), and will call shutdown(WR) on the socket. Note: not sure if
+      this will close the socket though.  However, this is a scenario to now
+      explore.
+
+TEST: large files
+
+      --> make code change.  when the client is dropped, make sure the log
+          line displays the message size, and the queue limit.
+
+      --> add a TODO for examining how:
+
+          (1) large messages can be sent in parts, and reassembled at the
+          client side.  i.e. we need a fragementer.  Each fragement can then
+          be placed on the queue, with a delay.
+
+          (2) examine how the admin reply can be changed, so that:
+
+              (a) a message is not always automatically sent by the reply from
+              the admin command.  (do this before release?)
+
+              (b) during an admin reply, arbitrary replies can be sent
+              directly, ie, how to make a call to the AdminInterface layer to
+              allow a reply to be sent.
+
+
+* [DONE] test dropping of slow consumner
 
 * code review
 
 * svn checkin
 
-* new version number  1.5
+* new version number  1.5  (and change the lib number)
 
 ----------------------------------------------------------------------
 
@@ -89,10 +150,96 @@ Or, is it just placed in the free-list?
 New exio IO system
 ~~~~~~~~~~~~~~~~~~
 
+* MEDIUM: writing test code, to test things like the recursive lock
+
+* EASY: alter the arch line, in the diags command, to display something like:
+  x86_64 / 64 etc, ie, provide the uname -m used during compilation.  Or,
+  instead, should we somehow find the compilation target?  I.e., uname -m will
+  just give the details of the host used for compilation, and not necessatily
+  the target.
+
+* HARD: do we need to have a more general table-snapshot request, so that we
+  can request partial snapshots (eg, selected rows, and selected fields).  I
+  thought this might be needed for field-change (via GUI), but not sure
+  now. Try to identify any use-cases where this would be useful.
+
+* MEDIUM: in admin command, provide ability to print the raw sam message being
+  sent out.  Need this for debugging purposes. Am suprised is it not already
+  there.  Probably can add it at the IO layer?  E.g. when AdminSession passes
+  a message to be sent.
+
+* MEDIUM: review Reactor.cc; there are some essential TODOs in there.
+
+* EASY: review the files, removing old notes etc that can be often found at
+  the top and bottom.
+
+* EASY: rename some of the IO classes, and also rename the files.
+
+* EASY: move the deprecated AdminIO (+ .h) to the attic
+
+* MEDIUM: review the drop_session feature.  Hopefully this should have been
+  removed.  However, we need a way at the exio API layer to boot a session.
+  E.g., an AdminInterface class method, called drop_session, or something.
+
+* EASY: go through the various thread and mutex C++11 spoof classes, and
+  remove the inline constructors and destructors.
+
+* MEDIUM: an improvement can b made in the inbound thread worker method in the
+  Client class.  Instead of pulling off all the waiting bytes and then
+  invokvng, the client callback, maybe invokve the client callback after each
+  waiting chunk is removed.  Why?  In order to avoid huge memory growth.  But
+  before doing this, review this suggestion again.
+
+* MEDIUM: I am still not convinced that the bug of chopped writes had been
+  resolved.  Ie this is when you doa write followed by a close, the quick
+  close will cause some of the final written bytes to be not sent from the
+  sender.  Solution is to use shutdown (I think).  So , maybe need to test for
+  this, but overall change would be to put ina proper active-close lifecycle,
+  which would be begin with a shutdown, the a delay, then a close.
+
+* MEDIUM: in the diags via, for each session, also include its fd number.
+
+* EASY: rename the worker threads of the Reactor, to something like
+  inbound_thr, because they are used solely for inbound message flow.
+
+* EASY: the DIAGS admin needs to get thread ID information from the Reactor,
+  instead of the admin sessions.
+
+* MEDIUM: test needed.  What happens is we have an AdminSession, attached to a
+  Reactor, which suspends the task thread?  At present, I don't think there is
+  any inbound queue limitation.
+
+* HARD: I suspect there is still one race condition problem with the new
+  socket IO stuff.  The situation could be an AdminSession which passes data
+  to the BufferedClient for transmission, followed by the destruction of the
+  AdminSession (during which, the AdminSession releases the BufferedClient,
+  which in turn requests deletion).  So, is it possible, during a flow control
+  event, that a BufferedClient could be destroyed, while it still has data
+  which has not yet been written to the socket? I.e., close could be called
+  before the data is written?  One thought about this is to put released
+  sockets into a shutdown lifecycle; ie, try to ensure their pending data is
+  written, and then shutdown is called, and then close is called, before
+  performing the actual release.  And, when doing this, ensure that a
+  destructing Reactor does not get held up (which is what happened when I
+  tried to do this before).
+
+* EASY: make the max pend out configurable
+
+* EASY: check in all the admin support scripts
+
+* EASY: make the ServerSocket timeout internal configurable.
+
+* HARD: review, and maybe redesign, how the Table and DataRow are represented.
+  Currently a row is a map of string -> string, ie, column name to value.
+  However, this is not so efficient; the holder of the row, DataTable, should
+  be the only structure which knows about column names; the DataRow should
+  really just hold a vector of values (and a vector of meta).
+
 * MEDIUM: test the ability of the Reactor to be destructed.  I.e. have a test
   server which is able to create/shutdown a second reactor.  At the moment we
   do delete a Reactor instance in AdminInterfaceImpl, but, it has not been
-  tested.
+  tested.  One day we might use the AdminInterface inside a xilib instance,
+  and those could be destructed and then created.
 
 * HARD: review the container used for session-management in the
   AdminInterfaceImpl, and how session-ids are created/reused etc.
@@ -129,9 +276,9 @@ New exio IO system
 * HARD: one problem in the BufferedClient is that we only grow the memory in
   the ReactorReadBuffer.  We never shrink it down.
 
-* EASY: in the console logger, add timestamp logging
+* DONE: in the console logger, add timestamp logging
 
-* EASY: in the logging interface, add char* file, int lineno params.
+* DONE: in the logging interface, add char* file, int lineno params.
 
 * MEDIUM [LOW] : I have turned off the parsing history.  However, if there is
   a parsing error, it would be nice to give a hint.  So, change the fail so
@@ -263,6 +410,15 @@ New exio IO system
 * HARD: move the housekeeping thread into the Reactor?
 
 * HARD: build using FreeBSD
+
+* HARD: improvement to the IO.  Many connections to an exio based server might
+        only listen to data, and not send SAM requests (aside from heartbeats
+        and logons).  For these, can we use a shared task thread instead of a
+        dedicated thread?
+
+* HARD / Longterm : is there a way to use SQLite internally within exio? That
+  way we would be able to support select statements.  Could also use it to
+  persiste to disk.  But, would it be too heavy-weight?
 
 Work: new approach to snapshots
 
@@ -699,158 +855,3 @@ Put locks on the outside of DataTable?
  */
 
 ----------------------------------------------------------------------
-
-asp
-zmon
-pmax
-pmac
-ipad
-amp [used]
-axis [used]
-libadmin
-pmax
-amp:
-libamp
-admin
-libadmin
-namespace libad
-dot
-axe -- C++ Parser
-rex
-sky
-axis
-libaxis
-flex -- unix tool
-xray
-XXX it a lightwiehgt lmon
-pmax  <--- don't like.
-CCM     libccm     <-- but is it really command and control
-ARIA - advanaced robitcss interface for Applications.
-AXIA
-IAM
-ICM   is a C++ librayr for prvuding any application with and Intefrace for
-Control and Montr
-icom :
-icom
-servo
-libadmin
-ccm -- someone has a utility called that
-rex
-admin
-exmo  -- wierd sounding
-expo -- libexpo is part of compiz
-exim -- gone
-[pa] process / applicatio
-[mo]  monitor, observe
-[macoex] manage / admin / control / operate exect / management
-[ex] execution
-[awns] alert, warn, notify, signal
-como
-amox
-libadmin
-libadmin
-amox
-cmd
-Cmd
-moa
-mox
-COMI  is an application command and monitoring framework that allows your
-application to be controlled via remote command, and for same application to
-publish data to be monitor.
-CCMXF  consists of two parts.  libxmcmd.   lilgui, is the
-MARS is an
-Control and Monotirong
-Ceres
-MARS
-libmars
-qualia
-monio
-Ceres
-quartz
-quant
-axon -- does exist, but nothing active.  Name is gone on sourceforge & google.
-Ceres -- confused pronounciation
-Admin ex
-amex
-amex
-ade
-sirius
-ceres::
-GYRO
-gyro::
-gyro
-corona
-ceres
-xerces
-cio
-comio
-CMDIO
-CMIO
-cmdio
-ceres
-imon
-imon C
-xerces
-cerse
-command
-amio
-gate
-ccm
-amio
-amio
-amio
-earth
-amio
-moio
-momo
-servo
-gyro
-amon
-apphq
-its in hq
-mu
-cameo
-AMIO
-amio
-amio
-ceres
-AMIO
-amio
-amio
-amio
-AMIO
-CaMIO
-apma
-AMMO
-AMMO
-AMMI
-moi
-sentry
-remo
-rcm
-amon
-amon  "aymon"
-exsert
-expose
-expede
-opal   -- online learning library
-star
-vesta
-ceres
-arc  --  is archive util on Linx
-rex
-axe
-apex
-hexa
-exon -- too much like Exxon
-atria
-ximo
-xinu
-nuxi
-ximu  xi-mu
-ximo
-exio
-ximon
-exmon  -- microsoft project
-
-
