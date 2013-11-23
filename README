@@ -8,20 +8,23 @@ Notes on making a release
 
 * Update these release notes
 
-* Change the version number in the configure.ac script, and in the libexio makefile.
+* Change the version number in the configure.ac script, and in the libexio
+  makefile to make a different library number.
 
-* Make a branch:
+* Make release branch via following:
 
 NEWVER=1.5.0
 SRC=file:///home/darrens/system/subversion/exio/exio
 DEST=file:///home/darrens/system/subversion/exio/branches/${NEWVER}
-svn copy --parents  ${SRC} ${DEST}
+svn copy -m "new release, $NEWVER" --parents  ${SRC} ${DEST}
+cd ~/work/dev/src/c++/exio/branches
+svn co $DEST
 
 
 IN PROGRESS
 -----------
 
-1.5.0
+1.5.0 - 23/11/13 - r261
 -----
 
 * IO handling for admin sessions now uses a thread pool, instead of there
