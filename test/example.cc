@@ -17,7 +17,34 @@ exio::ConsoleLogger logger(exio::ConsoleLogger::eStdout,
                            exio::ConsoleLogger::eInfo,
                            true);
 
-//
+//----------------------------------------------------------------------
+struct Admin_SendAlert : public exio::AdminCommand::Callback
+{
+    virtual exio::AdminResponse invoke(exio::AdminRequest& req)
+    {
+      std::string alert_error;
+      std::string alert_type;
+      std::string alert_id;
+      std::string alert_severity = exio::SEV_HIGH;
+
+      unsigned int argi = 0;
+      if (argi<req.args().size()) alert_error=req.args()[argi++];
+      if (argi<req.args().size()) alert_type=req.args()[argi++];
+      if (argi<req.args().size()) alert_id=req.args()[argi++];
+      if (argi<req.args().size()) alert_severity=req.args()[argi++];
+
+      ai->monitor_alert(ai->serviceid(),
+                        "example-server",
+                        alert_error,
+                        alert_type,
+                        alert_id,
+                        alert_severity);
+
+      return exio::AdminResponse::success(req.reqseqno);
+    }
+};
+
+//----------------------------------------------------------------------
 struct Admin_LargeReply : public exio::AdminCommand::Callback
 {
     virtual exio::AdminResponse invoke(exio::AdminRequest& req)
@@ -240,17 +267,24 @@ int __main(int argc, char** argv)
 
 
   Admin_LargeReply adminLargeReply;
-  ac = exio::AdminCommand("large_admin",
+  ac = exio::AdminCommand("LargeReply",
                           "send a large reply",
                           "Generate a large message to test the exio layer",
                           &adminLargeReply);
   ai->add_admin(ac);
 
   Admin_LotsOfNumbers adminLotsOfNumbers;
-  ac = exio::AdminCommand("lots_of_numbers",
+  ac = exio::AdminCommand("LotsOfNumbers",
                           "send a large reply",
                           "Generate a large message to test the exio layer",
                           &adminLotsOfNumbers);
+  ai->add_admin(ac);
+
+  Admin_SendAlert adminSendAlert;
+  ac = exio::AdminCommand("send_alert",
+                          "send a test alert",
+                          "args: error_string type id severity",
+                          &adminSendAlert);
   ai->add_admin(ac);
 
   // main loop
