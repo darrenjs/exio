@@ -12,7 +12,7 @@ Notes on making a release
 
 * Make a branch:
 
-NEWVER=1.4.3
+NEWVER=1.5.0
 SRC=file:///home/darrens/system/subversion/exio/exio
 DEST=file:///home/darrens/system/subversion/exio/branches/${NEWVER}
 svn copy --parents  ${SRC} ${DEST}
@@ -21,7 +21,17 @@ svn copy --parents  ${SRC} ${DEST}
 IN PROGRESS
 -----------
 
+1.5.0
+-----
 
+* IO handling for admin sessions now uses a thread pool, instead of there
+  being two dedicated threads per session.
+
+* new fields have been added to the alert call, e.g. the severity rating.
+
+* lib version-info: 2:0:0  (Major updated due to interface change).
+
+* slow consumers will now be dropped
 
 1.4.3 - 02/09/13 - r154
 -----
