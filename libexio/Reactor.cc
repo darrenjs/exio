@@ -121,6 +121,8 @@ class ReactorNotifQ
 
       char c = 'x';
       m_pending.push_back(m);
+
+      // write to pipe -- TODO: should handle error?
       write(m_pipeout, &c, 1);
     }
 
@@ -157,8 +159,12 @@ Reactor::Reactor(LogService* log, int nworkers)
   m_pipefd[0]=-1;  // reader
   m_pipefd[1]=-1;  // writer
 
+  //  In Linux versions before 2.6.11, the capacity of a pipe was the same as
+  //  the system page size (e.g., 4096 bytes on i386).  Since Linux 2.6.11,
+  //  the pipe capacity is 65536 bytes.
+
   // create our pipes
-  if (pipe2(m_pipefd, O_NONBLOCK) != 0)
+  if (pipe(m_pipefd) != 0)
   {
     int err = errno;
     _WARN_(m_log,
@@ -169,6 +175,16 @@ Reactor::Reactor(LogService* log, int nworkers)
 
     throw std::runtime_error("cannot create pipe");
   }
+
+  // set internal pipe to non-blocking
+  bool fcntlerr = false;
+  int fl;
+  fl = ::fcntl(m_pipefd[0], F_GETFL); if (fl < 0) fcntlerr = true;
+  if (::fcntl(m_pipefd[0], F_SETFL, fl | O_NONBLOCK) < 0)  fcntlerr = true;
+  fl = ::fcntl(m_pipefd[1], F_GETFL);  if (fl < 0) fcntlerr = true;
+  if (::fcntl(m_pipefd[1], F_SETFL, fl | O_NONBLOCK) < 0) fcntlerr = true;
+  if (fcntlerr) throw std::runtime_error("cannot set pipe to O_NONBLOCK");
+
   m_notifq = new ReactorNotifQ(m_pipefd[0], m_pipefd[1]);
 
   /* create internal threads last as last step of object construction */
