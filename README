@@ -27,10 +27,11 @@ IN PROGRESS
 -----------
 
 
-1.5.0 - 23/11/13 - r261
+1.5.0 - 23/11/13 - r265
 -----
 
 (1.5.0 was updated on 01/12/13)
+
 
 * IO handling for admin sessions now uses a thread pool, instead of there
   being two dedicated threads per session.
