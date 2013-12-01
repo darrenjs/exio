@@ -52,7 +52,12 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 target_triplet = @target@
-bin_PROGRAMS = admin$(EXEEXT)
+bin_PROGRAMS = admin$(EXEEXT) $(am__EXEEXT_1)
+
+# note, on earlier GCC, this may not work, so if you need to perform it
+# manually, do _append_ something like -Wl,-Bstatic,-lstdc++,-Bdynamic to the
+# link-line (and remove the -static-libstdc++ option)
+@USE_ADMINSTATIC_TRUE@am__append_1 = admin_static admin_static
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -66,12 +71,23 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
+@USE_ADMINSTATIC_TRUE@am__EXEEXT_1 = admin_static$(EXEEXT) \
+@USE_ADMINSTATIC_TRUE@	admin_static$(EXEEXT)
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_admin_OBJECTS = admin.$(OBJEXT)
 admin_OBJECTS = $(am_admin_OBJECTS)
-admin_LDADD = $(LDADD)
 admin_DEPENDENCIES =
+admin_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
+	$(admin_LDFLAGS) $(LDFLAGS) -o $@
+am__admin_static_SOURCES_DIST = admin.cc
+@USE_ADMINSTATIC_TRUE@am_admin_static_OBJECTS = admin.$(OBJEXT)
+admin_static_OBJECTS = $(am_admin_static_OBJECTS)
+admin_static_DEPENDENCIES =
+admin_static_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
+	$(CXXFLAGS) $(admin_static_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -85,8 +101,8 @@ CXXLD = $(CXX)
 CXXLINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(admin_SOURCES)
-DIST_SOURCES = $(admin_SOURCES)
+SOURCES = $(admin_SOURCES) $(admin_static_SOURCES)
+DIST_SOURCES = $(admin_SOURCES) $(am__admin_static_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -222,15 +238,12 @@ top_srcdir = @top_srcdir@
 # choices should be made by the user when they invoke the configure script.
 #AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall -I$(XLOGHOME)/include
 AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall
-AM_LDFLAGS = -pthread
-
-#XLOGHOME=/home/darrens/work/dev/src/c++/xlog/install
-#LDADD = -L../libexio -lexio $(LIBLS) -L$(XLOGHOME)/lib -lxlog
-LDADD = -L../libexio -lexio $(LIBLS)
-#noinst_PROGRAMS=server_demo
-
-# admin
 admin_SOURCES = admin.cc
+admin_LDADD = -L../libexio -lexio $(LIBLS)
+admin_LDFLAGS = -L../libexio -pthread
+@USE_ADMINSTATIC_TRUE@admin_static_SOURCES = admin.cc
+@USE_ADMINSTATIC_TRUE@admin_static_LDADD = -L../libexio -lexio $(LIBLS)
+@USE_ADMINSTATIC_TRUE@admin_static_LDFLAGS = -L../libexio -pthread -static  -static-libstdc++
 all: all-am
 
 .SUFFIXES:
@@ -313,7 +326,10 @@ clean-binPROGRAMS:
 	rm -f $$list
 admin$(EXEEXT): $(admin_OBJECTS) $(admin_DEPENDENCIES) $(EXTRA_admin_DEPENDENCIES) 
 	@rm -f admin$(EXEEXT)
-	$(CXXLINK) $(admin_OBJECTS) $(admin_LDADD) $(LIBS)
+	$(admin_LINK) $(admin_OBJECTS) $(admin_LDADD) $(LIBS)
+admin_static$(EXEEXT): $(admin_static_OBJECTS) $(admin_static_DEPENDENCIES) $(EXTRA_admin_static_DEPENDENCIES) 
+	@rm -f admin_static$(EXEEXT)
+	$(admin_static_LINK) $(admin_static_OBJECTS) $(admin_static_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -555,9 +571,6 @@ uninstall-am: uninstall-binPROGRAMS
 	pdf pdf-am ps ps-am tags uninstall uninstall-am \
 	uninstall-binPROGRAMS
 
-
-# server_dem
-#server_demo_SOURCES=server_demo.cc
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

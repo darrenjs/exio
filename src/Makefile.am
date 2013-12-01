@@ -3,18 +3,26 @@
 #AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall -I$(XLOGHOME)/include
 AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall
 
-AM_LDFLAGS=-pthread
-
-#XLOGHOME=/home/darrens/work/dev/src/c++/xlog/install
-#LDADD = -L../libexio -lexio $(LIBLS) -L$(XLOGHOME)/lib -lxlog
-LDADD = -L../libexio -lexio $(LIBLS)
-
+# bin_PROGRAMS=admin admin_static
 bin_PROGRAMS=admin
-#noinst_PROGRAMS=server_demo
 
-# admin
+if USE_ADMINSTATIC
+bin_PROGRAMS += admin_static
+endif
 
 admin_SOURCES=admin.cc
+admin_LDADD=-L../libexio -lexio $(LIBLS)
+admin_LDFLAGS=-L../libexio -pthread
 
-# server_dem
-#server_demo_SOURCES=server_demo.cc
+
+# note, on earlier GCC, this may not work, so if you need to perform it
+# manually, do _append_ something like -Wl,-Bstatic,-lstdc++,-Bdynamic to the
+# link-line (and remove the -static-libstdc++ option)
+if USE_ADMINSTATIC
+bin_PROGRAMS += admin_static
+admin_static_SOURCES=admin.cc
+admin_static_LDADD=-L../libexio -lexio $(LIBLS)
+admin_static_LDFLAGS=-L../libexio -pthread -static  -static-libstdc++
+endif
+
+

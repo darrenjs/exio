@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 # defined.
 AC_CANONICAL_SYSTEM
 
-# Not: the -Wall here is for automake errors; is unrelated to gcc errors
+# Note: the -Wall here is for automake errors; is unrelated to gcc errors
 AM_INIT_AUTOMAKE([1.10 no-define -Wall])
 
 AC_CONFIG_HEADERS([config.h])
@@ -39,6 +39,24 @@ AC_CHECK_HEADERS([stdlib.h string.h strings.h unistd.h getopt.h])
 AC_HEADER_STDBOOL
 AC_C_CONST
 AC_C_INLINE
+
+##########################################################################
+# optional support for the admin static target
+##########################################################################
+
+dnl Example of default-enabled feature
+AC_MSG_CHECKING([whether to build admin_static target])
+AC_ARG_ENABLE([adminstatic],
+    AS_HELP_STRING([--enable-adminstatic], [Enable admin_static static target (def=no)]),
+    [enable_adminstatic="$enableval"],
+    [enable_adminstatic=no],
+)
+AC_MSG_RESULT([$enable_adminstatic])
+AM_CONDITIONAL([USE_ADMINSTATIC], [test x"$enable_adminstatic" = x"yes" ])
+
+##########################################################################
+
+
 
 #========== Generation ==========
 

@@ -635,6 +635,8 @@ ac_subst_vars='am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
 LIBOBJS
+USE_ADMINSTATIC_FALSE
+USE_ADMINSTATIC_TRUE
 CXXCPP
 CPP
 OTOOL64
@@ -765,6 +767,7 @@ enable_fast_install
 with_gnu_ld
 with_sysroot
 enable_libtool_lock
+enable_adminstatic
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1405,6 +1408,7 @@ Optional Features:
   --enable-fast-install[=PKGS]
                           optimize for fast installation [default=yes]
   --disable-libtool-lock  avoid locking (might break parallel builds)
+  --enable-adminstatic    Enable admin_static static target (def=no)
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -2532,7 +2536,7 @@ test -n "$target_alias" &&
   program_prefix=${target_alias}-
 
 
-# Not: the -Wall here is for automake errors; is unrelated to gcc errors
+# Note: the -Wall here is for automake errors; is unrelated to gcc errors
 am__api_version='1.11'
 
 # Find a good install program.  We prefer a C program (faster),
@@ -16523,6 +16527,34 @@ _ACEOF
 esac
 
 
+##########################################################################
+# optional support for the admin static target
+##########################################################################
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build admin_static target" >&5
+$as_echo_n "checking whether to build admin_static target... " >&6; }
+# Check whether --enable-adminstatic was given.
+if test "${enable_adminstatic+set}" = set; then :
+  enableval=$enable_adminstatic; enable_adminstatic="$enableval"
+else
+  enable_adminstatic=no
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_adminstatic" >&5
+$as_echo "$enable_adminstatic" >&6; }
+ if test x"$enable_adminstatic" = x"yes" ; then
+  USE_ADMINSTATIC_TRUE=
+  USE_ADMINSTATIC_FALSE='#'
+else
+  USE_ADMINSTATIC_TRUE='#'
+  USE_ADMINSTATIC_FALSE=
+fi
+
+
+##########################################################################
+
+
+
 #========== Generation ==========
 
 # List the files that will be generated. These are mainly makefiles, which
@@ -16666,6 +16698,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${am__fastdepCC_TRUE}" && test -z "${am__fastdepCC_FALSE}"; then
   as_fn_error $? "conditional \"am__fastdepCC\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${USE_ADMINSTATIC_TRUE}" && test -z "${USE_ADMINSTATIC_FALSE}"; then
+  as_fn_error $? "conditional \"USE_ADMINSTATIC\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 

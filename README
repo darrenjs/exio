@@ -1,8 +1,6 @@
 HISTORY
 =======
 
-
-
 Notes on making a release
 -------------------------
 
@@ -23,13 +21,16 @@ svn co $DEST
 # optional export
 svn export $DEST exio-$NEWVER
 chmod -R a-w exio-$NEWVER
-tar cvfz exio-$NEWVER.tar.z
+tar cvfz exio-$NEWVER.tar.z  exio-$NEWVER
 
 IN PROGRESS
 -----------
 
+
 1.5.0 - 23/11/13 - r261
 -----
+
+(1.5.0 was updated on 01/12/13)
 
 * IO handling for admin sessions now uses a thread pool, instead of there
   being two dedicated threads per session.
@@ -39,6 +40,11 @@ IN PROGRESS
 * lib version-info: 2:0:0  (Major updated due to interface change).
 
 * slow consumers will now be dropped
+
+* added admin_static target
+
+* no longer using pipe2, because it is not supported on SUSE 10
+
 
 1.4.3 - 02/09/13 - r154
 -----
