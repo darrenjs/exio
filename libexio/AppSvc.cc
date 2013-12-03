@@ -19,6 +19,8 @@
 */
 #include "exio/AppSvc.h"
 
+#include "mutex.h"
+
 #include <iostream>
 #include <sstream>
 
@@ -29,6 +31,22 @@
 
 namespace exio {
 
+struct ConsoleLoggerImpl
+{
+    ConsoleLoggerImpl(ConsoleLogger::StreamType __stream,
+                      int __level,
+                      bool __incsource)
+      : stream(__stream),
+        incsource(__incsource),
+        level(__level)
+    {
+    }
+    ConsoleLogger::StreamType stream;
+    bool incsource;
+    int   level;
+    cpp11::mutex  mutex;
+};
+
 //----------------------------------------------------------------------
 AppSvc::AppSvc(Config config,
                LogService * logsvc)
@@ -37,13 +55,16 @@ AppSvc::AppSvc(Config config,
 {
 }
 //----------------------------------------------------------------------
-ConsoleLogger::ConsoleLogger(StreamType stream,
+ConsoleLogger::ConsoleLogger(StreamType __stream,
                              int __level,
-                             bool incsource)
-  : m_stream(stream),
-    m_incsource(incsource),
-    m_level(__level)
+                             bool __incsource)
+  : m_impl(new ConsoleLoggerImpl(__stream, __level, __incsource))
 {
+}
+//----------------------------------------------------------------------
+ConsoleLogger::~ConsoleLogger()
+{
+  delete m_impl;
 }
 //----------------------------------------------------------------------
 void ConsoleLogger::debug(const std::string&  s, const char* file, int ln)
@@ -66,7 +87,7 @@ void ConsoleLogger::warn(const std::string&  s, const char* file, int ln)
   dolog("WARN", s, file, ln);
 }
 //----------------------------------------------------------------------
-void ConsoleLogger::dolog(const char* level,
+void ConsoleLogger::ConsoleLogger::dolog(const char* level,
                           const std::string& s,
                           const char* file,
                           int ln)
@@ -96,20 +117,24 @@ void ConsoleLogger::dolog(const char* level,
 
   oss << timestamp;
   oss << "[" << tid << "] ";
-  if (m_incsource)
+  if (m_impl->incsource)
   {
     oss << "(" << file << ":" << ln << ") ";
   }
   oss << level << " " << s << "\n";
 
   {
-    cpp11::lock_guard<cpp11::mutex> lock( m_mutex );
-    if (m_stream==eStdout)
+    cpp11::lock_guard<cpp11::mutex> lock( m_impl->mutex );
+    if (m_impl->stream==eStdout)
       std::cout << oss.str();
     else
       std::cerr << oss.str();
   }
 }
 
+bool ConsoleLogger::want_debug() { return m_impl->level <= eDebug; }
+bool ConsoleLogger::want_info()  { return m_impl->level <= eInfo;  }
+bool ConsoleLogger::want_warn()  { return m_impl->level <= eWarn;  }
+bool ConsoleLogger::want_error() { return m_impl->level <= eError; }
 
 } // namespace

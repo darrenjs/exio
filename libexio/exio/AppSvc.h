@@ -20,8 +20,6 @@
 #ifndef EXIO_APPSVC_H
 #define EXIO_APPSVC_H
 
-#include "mutex.h"
-
 #include <string>
 
 namespace exio
@@ -53,6 +51,7 @@ class LogService
 };
 
 
+class ConsoleLoggerImpl;
 class ConsoleLogger : public LogService
 {
   public:
@@ -69,23 +68,25 @@ class ConsoleLogger : public LogService
     ConsoleLogger(StreamType stream,
                   int level,
                   bool incsource=false);
+    ~ConsoleLogger();
 
     virtual void debug(const std::string& msg, const char* file, int ln);
     virtual void info(const std::string& msg,  const char* file, int ln);
     virtual void warn(const std::string& msg,  const char* file, int ln);
     virtual void error(const std::string& msg, const char* file, int ln);
 
-    virtual bool want_debug() { return m_level <= eDebug; }
-    virtual bool want_info()  { return m_level <= eInfo; }
-    virtual bool want_warn()  { return m_level <= eWarn; }
-    virtual bool want_error() { return m_level <= eError; }
+    virtual bool want_debug();
+    virtual bool want_info();
+    virtual bool want_warn();
+    virtual bool want_error();
 
   private:
     void dolog(const char*, const std::string&, const char*, int);
-    StreamType m_stream;
-    bool m_incsource;
-    int m_level;
-    cpp11::mutex  m_mutex;
+    ConsoleLoggerImpl * m_impl;
+
+  private:
+    ConsoleLogger(const ConsoleLogger&);
+    ConsoleLogger& operator=(const ConsoleLogger&);
 };
 
 class AppSvc

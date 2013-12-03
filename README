@@ -20,7 +20,6 @@ svn co $DEST
 
 # optional export
 svn export $DEST exio-$NEWVER
-chmod -R a-w exio-$NEWVER
 tar cvfz exio-$NEWVER.tar.z  exio-$NEWVER
 
 IN PROGRESS
