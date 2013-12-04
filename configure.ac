@@ -1,7 +1,7 @@
 
 #========== Initialisation ==========
 
-AC_INIT([exio], [1.5.0], [exio-bug-report@darrenjs.net], [exio], [ ] )
+AC_INIT([exio], [1.5.1], [exio-bug-report@darrenjs.net], [exio], [ ] )
 AC_PREREQ([2.59])
 
 # This macro causes the environment variables, $host, $build and $target to be
@@ -11,7 +11,10 @@ AC_CANONICAL_SYSTEM
 # Note: the -Wall here is for automake errors; is unrelated to gcc errors
 AM_INIT_AUTOMAKE([1.10 no-define -Wall])
 
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([libexio/exio/exio_config.h])
+
+
+
 AC_PROG_CXX
 AC_CONFIG_MACRO_DIR([m4])
 

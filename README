@@ -7,7 +7,8 @@ Notes on making a release
 * Update these release notes
 
 * Change the version number in the configure.ac script, and in the libexio
-  makefile to make a different library number.
+  makefile to make a different library number (if a library number change is
+  needed)
 
 * Make release branch via following:
 
@@ -30,6 +31,8 @@ IN PROGRESS
 ----------------
 
 * removed mutex from public header
+
+* moving config.h into libexio/exio
 
 1.5.0 - 23/11/13 - r265
 ----------------
