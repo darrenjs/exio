@@ -27,12 +27,10 @@ IN PROGRESS
 -----------
 
 
-1.5.1 - 03/12/13 -r275
+1.5.1 -
 ----------------
 
 * removed mutex from public header
-
-* moving config.h into libexio/exio
 
 1.5.0 - 23/11/13 - r265
 ----------------

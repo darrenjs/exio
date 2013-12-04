@@ -11,7 +11,7 @@ AC_CANONICAL_SYSTEM
 # Note: the -Wall here is for automake errors; is unrelated to gcc errors
 AM_INIT_AUTOMAKE([1.10 no-define -Wall])
 
-AC_CONFIG_HEADERS([libexio/exio/exio_config.h])
+AC_CONFIG_HEADERS([config.h])
 
 
 
@@ -52,8 +52,7 @@ AC_MSG_CHECKING([whether to build admin_static target])
 AC_ARG_ENABLE([adminstatic],
     AS_HELP_STRING([--enable-adminstatic], [Enable admin_static static target (def=no)]),
     [enable_adminstatic="$enableval"],
-    [enable_adminstatic=no],
-)
+    [enable_adminstatic=no],)
 AC_MSG_RESULT([$enable_adminstatic])
 AM_CONDITIONAL([USE_ADMINSTATIC], [test x"$enable_adminstatic" = x"yes" ])
 

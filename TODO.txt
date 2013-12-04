@@ -150,6 +150,11 @@ Or, is it just placed in the free-list?
 New exio IO system
 ~~~~~~~~~~~~~~~~~~
 
+* MEDIUM: on reflection, don't think it is a good idea to public the
+  exio_config header; so revert back to what was before.  However, still need
+  to find a way to put the exio version number, eg 1.5.1, into a header file
+  so that it can be grep'd.
+
 * MEDIUM: writing test code, to test things like the recursive lock
 
 * EASY: alter the arch line, in the diags command, to display something like:

@@ -35,7 +35,7 @@ lib_LTLIBRARIES = libexio.la
 
 # The "include_" prefix includes a list of headers to be installed.  The
 # "nobase_" additional prefix means the directory names are copied too.
-nobase_include_HEADERS = exio/AdminInterface.h exio/sam.h exio/AdminCommand.h exio/MsgIDs.h exio/AdminSessionID.h exio/AppSvc.h exio/AdminSession.h exio/AdminIOListener.h exio/exio_config.h
+nobase_include_HEADERS = exio/AdminInterface.h exio/sam.h exio/AdminCommand.h exio/MsgIDs.h exio/AdminSessionID.h exio/AppSvc.h exio/AdminSession.h exio/AdminIOListener.h
 
 # List the sources for an individual library
 libexio_la_SOURCES = AdminCommand.cc AdminInterface.cc AdminServerSocket.cc		\
