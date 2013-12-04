@@ -24,8 +24,7 @@
 #include "exio/MsgIDs.h"
 #include "exio/utils.h"
 #include "exio/Reactor.h"
-
-#include "config.h"
+#include "exio/exio_config.h"
 
 #include <stdlib.h>
 #include <unistd.h>
