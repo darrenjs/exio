@@ -53,10 +53,9 @@ host_triplet = @host@
 target_triplet = @target@
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
-	$(srcdir)/Makefile.in $(top_srcdir)/configure \
-	$(top_srcdir)/libexio/exio/exio_config.h.in AUTHORS COPYING \
-	ChangeLog INSTALL NEWS config.guess config.sub depcomp \
-	install-sh ltmain.sh missing
+	$(srcdir)/Makefile.in $(srcdir)/config.h.in \
+	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS \
+	config.guess config.sub depcomp install-sh ltmain.sh missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
 	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
@@ -67,7 +66,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
  configure.lineno config.status.lineno
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/libexio/exio/exio_config.h
+CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 SOURCES =
@@ -263,7 +262,8 @@ top_srcdir = @top_srcdir@
 # defined in Makefile.am.
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = libcpp11 libexio src test
-all: all-recursive
+all: config.h
+	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
 .SUFFIXES:
 am--refresh: Makefile
@@ -301,20 +301,20 @@ $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	$(am__cd) $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
 $(am__aclocal_m4_deps):
 
-libexio/exio/exio_config.h: libexio/exio/stamp-h1
-	@if test ! -f $@; then rm -f libexio/exio/stamp-h1; else :; fi
-	@if test ! -f $@; then $(MAKE) $(AM_MAKEFLAGS) libexio/exio/stamp-h1; else :; fi
+config.h: stamp-h1
+	@if test ! -f $@; then rm -f stamp-h1; else :; fi
+	@if test ! -f $@; then $(MAKE) $(AM_MAKEFLAGS) stamp-h1; else :; fi
 
-libexio/exio/stamp-h1: $(top_srcdir)/libexio/exio/exio_config.h.in $(top_builddir)/config.status
-	@rm -f libexio/exio/stamp-h1
-	cd $(top_builddir) && $(SHELL) ./config.status libexio/exio/exio_config.h
-$(top_srcdir)/libexio/exio/exio_config.h.in:  $(am__configure_deps) 
+stamp-h1: $(srcdir)/config.h.in $(top_builddir)/config.status
+	@rm -f stamp-h1
+	cd $(top_builddir) && $(SHELL) ./config.status config.h
+$(srcdir)/config.h.in:  $(am__configure_deps) 
 	($(am__cd) $(top_srcdir) && $(AUTOHEADER))
-	rm -f libexio/exio/stamp-h1
+	rm -f stamp-h1
 	touch $@
 
 distclean-hdr:
-	-rm -f libexio/exio/exio_config.h libexio/exio/stamp-h1
+	-rm -f config.h stamp-h1
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -405,7 +405,7 @@ ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
 	mkid -fID $$unique
 tags: TAGS
 
-TAGS: tags-recursive $(HEADERS) $(SOURCES)  $(TAGS_DEPENDENCIES) \
+TAGS: tags-recursive $(HEADERS) $(SOURCES) config.h.in $(TAGS_DEPENDENCIES) \
 		$(TAGS_FILES) $(LISP)
 	set x; \
 	here=`pwd`; \
@@ -422,7 +422,7 @@ TAGS: tags-recursive $(HEADERS) $(SOURCES)  $(TAGS_DEPENDENCIES) \
 	      set "$$@" "$$include_option=$$here/$$subdir/TAGS"; \
 	  fi; \
 	done; \
-	list='$(SOURCES) $(HEADERS)  $(LISP) $(TAGS_FILES)'; \
+	list='$(SOURCES) $(HEADERS) config.h.in $(LISP) $(TAGS_FILES)'; \
 	unique=`for i in $$list; do \
 	    if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
 	  done | \
@@ -440,9 +440,9 @@ TAGS: tags-recursive $(HEADERS) $(SOURCES)  $(TAGS_DEPENDENCIES) \
 	  fi; \
 	fi
 ctags: CTAGS
-CTAGS: ctags-recursive $(HEADERS) $(SOURCES)  $(TAGS_DEPENDENCIES) \
+CTAGS: ctags-recursive $(HEADERS) $(SOURCES) config.h.in $(TAGS_DEPENDENCIES) \
 		$(TAGS_FILES) $(LISP)
-	list='$(SOURCES) $(HEADERS)  $(LISP) $(TAGS_FILES)'; \
+	list='$(SOURCES) $(HEADERS) config.h.in $(LISP) $(TAGS_FILES)'; \
 	unique=`for i in $$list; do \
 	    if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
 	  done | \
@@ -649,7 +649,7 @@ distcleancheck: distclean
 	       exit 1; } >&2
 check-am: all-am
 check: check-recursive
-all-am: Makefile
+all-am: Makefile config.h
 installdirs: installdirs-recursive
 installdirs-am:
 install: install-recursive
@@ -752,8 +752,8 @@ ps-am:
 
 uninstall-am:
 
-.MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) ctags-recursive \
-	install-am install-strip tags-recursive
+.MAKE: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) all \
+	ctags-recursive install-am install-strip tags-recursive
 
 .PHONY: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) CTAGS GTAGS \
 	all all-am am--refresh check check-am clean clean-generic \

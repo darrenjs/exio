@@ -68,7 +68,7 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/libexio/exio/exio_config.h
+CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 @USE_ADMINSTATIC_TRUE@am__EXEEXT_1 = admin_static$(EXEEXT) \
@@ -88,7 +88,7 @@ admin_static_DEPENDENCIES =
 admin_static_LINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
 	$(CXXFLAGS) $(admin_static_LDFLAGS) $(LDFLAGS) -o $@
-DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)/libexio/exio
+DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
@@ -237,7 +237,7 @@ top_srcdir = @top_srcdir@
 # NOTE: it is not good practice to add "-Wall" and "-03" etc here.  Those
 # choices should be made by the user when they invoke the configure script.
 #AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -Wall -I$(XLOGHOME)/include
-AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio -I$(top_builddir)/libexio -Wall
+AM_CPPFLAGS = -I$(top_srcdir)/libcpp11 -I$(top_srcdir)/libexio  -Wall
 admin_SOURCES = admin.cc
 admin_LDADD = -L../libexio -lexio $(LIBLS)
 admin_LDFLAGS = -L../libexio -pthread
