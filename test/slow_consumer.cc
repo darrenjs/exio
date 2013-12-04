@@ -24,7 +24,7 @@
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
 #include "exio/Reactor.h"
-#include "config.h"
+#include "exio/exio_config.h"
 
 #include "condition_variable.h"
 #include "mutex.h"
