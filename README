@@ -27,10 +27,12 @@ IN PROGRESS
 -----------
 
 
-1.5.1 -
+1.5.1 - 05/12/13
 ----------------
 
 * removed mutex from public header
+
+* moved ClientCallback.h into public headers
 
 1.5.0 - 23/11/13 - r265
 ----------------
