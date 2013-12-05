@@ -3,6 +3,7 @@
 #include "exio/Logger.h"
 #include "exio/AppSvc.h"
 #include "exio/Reactor.h"
+#include "exio/ClientCallback.h"
 
 // extern "C"
 // {

@@ -21,7 +21,7 @@
 #define EXIO_ADMINSESSION_H
 
 #include "exio/AdminSessionID.h"
-#include "exio/Client.h"
+#include "exio/ClientCallback.h"
 #include "exio/sam.h"
 
 #include <list>
@@ -42,7 +42,7 @@ class AppSvc;
 class Reactor;
 
 
-  class AdminSession : public ClientCallback
+class AdminSession : public ClientCallback
 {
   public:
 

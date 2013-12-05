@@ -20,12 +20,13 @@
 #ifndef EXIO_CLIENT_H
 #define EXIO_CLIENT_H
 
+
+#include "exio/ReactorReadBuffer.h"
+
 #include "thread.h"
 #include "mutex.h"
 #include "atomic.h"
 #include "condition_variable.h"
-
-#include "exio/ReactorReadBuffer.h"
 
 #include <queue>
 #include <deque>
@@ -124,24 +125,10 @@ class ReactorClient
 };
 
 
-class Client;
 class ReactorReadBuffer;
 
-class ClientCallback
-{
-  public:
-    virtual ~ClientCallback(){}
-
-
-    /** Data has arrived on the the underlying IO session */
-    virtual size_t process_input(Client*, const char*, int) = 0;
-
-    /** Underlying IO session has closed */
-    virtual void   process_close(Client*) = 0;
-
-};
-
 /* TODO: rename this to BufferedClient */
+class ClientCallback;
 class Client : public ReactorClient
 {
   public:

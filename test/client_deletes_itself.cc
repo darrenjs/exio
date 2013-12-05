@@ -3,6 +3,7 @@
 #include "exio/MsgIDs.h"
 #include "exio/Reactor.h"
 #include "exio/Client.h"
+#include "exio/ClientCallback.h"
 #include "exio/AppSvc.h"
 
 #include <iostream>
