@@ -12,7 +12,7 @@ Notes on making a release
 
 * Make release branch via following:
 
-NEWVER=1.5.1
+NEWVER=1.5.2
 SRC=file:///home/darrens/system/subversion/exio/exio
 DEST=file:///home/darrens/system/subversion/exio/branches/${NEWVER}
 svn copy -m "new release, $NEWVER" --parents  ${SRC} ${DEST}
@@ -27,7 +27,7 @@ IN PROGRESS
 -----------
 
 
-1.5.1 - 05/12/13
+1.5.2 - 05/12/13
 ----------------
 
 * removed mutex from public header

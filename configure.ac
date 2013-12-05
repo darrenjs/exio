@@ -1,7 +1,7 @@
 
 #========== Initialisation ==========
 
-AC_INIT([exio], [1.5.1], [exio-bug-report@darrenjs.net], [exio], [ ] )
+AC_INIT([exio], [1.5.2], [exio-bug-report@darrenjs.net], [exio], [ ] )
 AC_PREREQ([2.59])
 
 # This macro causes the environment variables, $host, $build and $target to be
