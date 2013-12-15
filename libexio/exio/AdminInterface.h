@@ -28,6 +28,8 @@ namespace exio
 
 class AdminInterfaceImpl;
 class AdminInterface;
+class AdminSession;
+class AdminSessionListener;
 
 /* Commonly used alert severity codes - note, leading two digits are the Alert
  * Severity Rating (ASR) */
@@ -38,10 +40,11 @@ static std::string const SEV_LOW      = "40-low";
 static std::string const SEV_INFO     = "30-info";
 static std::string const SEV_DEBUG    = "20-debug";
 
+
+const char* version_string();
+
 class AdminInterface
 {
-  public:
-
   public:
     AdminInterface(Config config,
                    LogService* logservice);
@@ -70,6 +73,11 @@ class AdminInterface
     void session_info(SID, sid_desc&, bool& found) const;
 
     size_t session_count() const;
+
+
+    /* Sessions initiated locally */
+    void   register_ext_session(AdminSession*);
+    void deregister_ext_session(AdminSession*);
 
     /* ----- Monitoring ----- */
 
@@ -142,8 +150,8 @@ class AdminInterface
                        const std::string& alert_id = "",
                        const std::string& severity = SEV_MODERATE);
 
-  private:
 
+  private:
     AppSvc m_appsvc;
     AdminInterfaceImpl * m_impl;
 };

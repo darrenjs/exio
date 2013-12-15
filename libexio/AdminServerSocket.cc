@@ -214,90 +214,97 @@ void AdminServerSocket::create_listen_socket()
 //----------------------------------------------------------------------
 void AdminServerSocket::accept_TEP()
 {
-  create_listen_socket();
+  bool enable_server = (m_aii->appsvc().conf().server_port != EXIO_NO_SERVER);
+
+  if (enable_server)
+  {
+    create_listen_socket();
+    _INFO_(m_aii->appsvc().log(),
+           "Listening on port " << m_aii->appsvc().conf().server_port);
+  }
 
   m_threadid  = syscall(SYS_gettid);
   m_pthreadid = pthread_self();
-
-  _INFO_(m_aii->appsvc().log(),
-         "Listening on port " << m_aii->appsvc().conf().server_port);
 
   int conn_count = 0;
 
   time_t last_house_keep = ::time(NULL);
   time_t conncount_on_last_house = conn_count;
 
-
   // TODO: need a way to singal this loop to stop.
   while (true)
   {
-    sockaddr_in clientaddr;
-    socklen_t addrlen = sizeof(clientaddr);
-    memset(&clientaddr, 0, sizeof(clientaddr));
-
-    int connfd = -1;
-
-    /* attempt to accept a new connection */
-    try
-    {
-      connfd = Accept(m_servfd, (struct sockaddr*) &clientaddr, &addrlen,
-                      m_aii->appsvc().log());
-      conn_count++;
-    }
-    catch (const std::exception& e)
-    {
-      _ERROR_(m_aii->appsvc().log(),
-              "accept() failed: " << e.what() );
-    }
-    catch (...)
-    {
-      _ERROR_(m_aii->appsvc().log(),
-              "accept() failed: unknown exception" );
-    }
-
-    if ( connfd < 0)
-    {
-      /* timeout or exception */
-    }
+    if (!enable_server)  {  /* non-server mode*/  sleep(ACCEPT_TIMEOUT_SECS);  }
     else
     {
-      bool session_created_ok = false;
+      sockaddr_in clientaddr;
+      socklen_t addrlen = sizeof(clientaddr);
+      memset(&clientaddr, 0, sizeof(clientaddr));
+
+      int connfd = -1;
+
+      /* attempt to accept a new connection */
       try
       {
-
-#ifdef SO_KEEPALIVE
-        /* Set keepalives on the socket to detect dropped connections. */
-        {
-          int keepalive = 1;
-          if (setsockopt (connfd, SOL_SOCKET, SO_KEEPALIVE,
-                          (char *) &keepalive, sizeof (keepalive)) < 0)
-          {
-            int __errno = errno;
-            _WARN_(m_aii->appsvc().log(),"setsockopt (SO_KEEPALIVE): "
-                   << exio::utils::strerror(__errno));
-          }
-        }
-#endif
-
-        m_aii->createNewSession( connfd );
-        session_created_ok = true;
+        connfd = Accept(m_servfd, (struct sockaddr*) &clientaddr, &addrlen,
+                        m_aii->appsvc().log());
+        conn_count++;
       }
       catch (const std::exception& e)
       {
         _ERROR_(m_aii->appsvc().log(),
-                "createNewSession() failed: " << e.what() );
+                "accept() failed: " << e.what() );
       }
       catch (...)
       {
         _ERROR_(m_aii->appsvc().log(),
-                "createNewSession() failed: unknown exception" );
+                "accept() failed: unknown exception" );
       }
 
-      if (!session_created_ok)
+      if ( connfd < 0)
       {
-        _WARN_(m_aii->appsvc().log(), "closing socket " << connfd
-               << " because session creation failed");
-        ::close( connfd );
+        /* timeout or exception */
+      }
+      else
+      {
+        bool session_created_ok = false;
+        try
+        {
+
+#ifdef SO_KEEPALIVE
+          /* Set keepalives on the socket to detect dropped connections. */
+          {
+            int keepalive = 1;
+            if (setsockopt (connfd, SOL_SOCKET, SO_KEEPALIVE,
+                            (char *) &keepalive, sizeof (keepalive)) < 0)
+            {
+              int __errno = errno;
+              _WARN_(m_aii->appsvc().log(),"setsockopt (SO_KEEPALIVE): "
+                     << exio::utils::strerror(__errno));
+            }
+          }
+#endif
+
+          m_aii->createNewSession( connfd );
+          session_created_ok = true;
+        }
+        catch (const std::exception& e)
+        {
+          _ERROR_(m_aii->appsvc().log(),
+                  "createNewSession() failed: " << e.what() );
+        }
+        catch (...)
+        {
+          _ERROR_(m_aii->appsvc().log(),
+                  "createNewSession() failed: unknown exception" );
+        }
+
+        if (!session_created_ok)
+        {
+          _WARN_(m_aii->appsvc().log(), "closing socket " << connfd
+                 << " because session creation failed");
+          ::close( connfd );
+        }
       }
     }
 

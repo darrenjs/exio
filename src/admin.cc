@@ -23,7 +23,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
-#include "exio/Reactor.h"
+#include "exio/AdminInterface.h"
 #include "config.h"
 
 #include "condition_variable.h"
@@ -48,6 +48,7 @@
 #include <netinet/ip.h> /* superset of previous */
 #include <sys/prctl.h>
 
+exio::AdminInterface * g_ai = NULL;
 
 struct ProgramOptions
 {
@@ -94,7 +95,7 @@ AdminSessionGuard::~AdminSessionGuard()
 }
 //----------------------------------------------------------------------
 
-class AdminListener : public exio::AdminSession::Listener
+class AdminListener : public exio::AdminSessionListener
 {
   public:
 
@@ -625,7 +626,7 @@ void usage()
 
   std::cout << "Options:\n\n";
   std::cout << "  -d\tlog exio problems; repeat twice for info, thrice for debug\n";
-  std::cout << "  -v\tversion info";
+  std::cout << "  -v,--version\tversion info";
   std::cout << std::endl;
 }
 
@@ -716,6 +717,8 @@ int __main(const int argc, char** argv)
 
   // define application services required by exio objects
   exio::Config config;
+  config.serviceid = "admin";
+  config.server_port = EXIO_NO_SERVER;
 
   // TODO: allow the error level to be specified by config
 
@@ -766,8 +769,9 @@ int __main(const int argc, char** argv)
   }
 #endif
 
-
-  exio::Reactor reactor(appsvc.log());
+  _WARN_(logptr, "starting admin session ");
+  g_ai = new exio::AdminInterface(config, &logger);
+  g_ai->start();
 
   AdminListener listener;
 
@@ -776,9 +780,8 @@ int __main(const int argc, char** argv)
   exio::AdminSession* sptr = new exio::AdminSession(appsvc, fd, &listener, 1);
   AdminSessionGuard admin_session_guard(sptr);
 
-  //exio::AdminSession* sptr = new exio::AdminSession(appsvc, fd, &listener, 1);
-
-  sptr->init(&reactor);
+  // begin session io
+  g_ai->register_ext_session( sptr );
 
   // Generate a logon message
 
@@ -842,6 +845,7 @@ int __main(const int argc, char** argv)
   int retval = 0;
   retval = listener.wait_for_session_closure();
 
+  g_ai->deregister_ext_session( sptr );
 
   sptr->close();
 
@@ -869,6 +873,12 @@ int main(const int argc, char** argv)
     std::cout << "exception: unknown" << std::endl;
     retval = 127;
   }
+
+  try
+  {
+    delete g_ai;
+  } catch (...){}
+
 
   /* Use _exit to exit immediately.  This is ensure that the program does not
    * get stuck anywhere, eg, in any of the atexit routines. This is important

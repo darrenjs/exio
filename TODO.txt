@@ -150,6 +150,14 @@ Or, is it just placed in the free-list?
 New exio IO system
 ~~~~~~~~~~~~~~~~~~
 
+* MEDIUM: handling the POLL_PRI poll event; currently not sure what needs to
+  be done.
+
+* HARD: enhance the autoconf, so that if it detects gcc, and a later version
+  of gcc, then we can use the --static-libstdc++ option to generate a static
+  target.  At the moment I think that I am using the option always, and so it
+  does generate a compiler warning.
+
 * MEDIUM: on reflection, don't think it is a good idea to public the
   exio_config header; so revert back to what was before.  However, still need
   to find a way to put the exio version number, eg 1.5.1, into a header file

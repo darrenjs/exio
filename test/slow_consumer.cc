@@ -23,7 +23,7 @@
 #include "exio/sam.h"
 #include "exio/MsgIDs.h"
 #include "exio/Logger.h"
-#include "exio/Reactor.h"
+#include "exio/AdminInterface.h"
 #include "config.h"
 
 #include "condition_variable.h"
@@ -176,7 +176,7 @@ struct ProgramOptions
 } po;
 pid_t g_pid;
 
-class AdminListener : public exio::AdminSession::Listener
+class AdminListener : public exio::AdminSessionListener
 {
   public:
 
@@ -525,9 +525,14 @@ int main(const int argc, char** argv)
 
     AdminListener listener(fd);
 
-    exio::Reactor reactor(appsvc.log());
+    exio::AdminInterface * ai = new exio::AdminInterface(config, &logger);
+    ai->start();
+
     exio::AdminSession adminsession(appsvc, fd, &listener, 1);
-    adminsession.init(&reactor);
+
+    // begin session io
+    ai->register_ext_session( &adminsession );
+
     // Generate a logon message
 
     // TODO: once the ximon is able to send logon messages first, then we won't
@@ -540,6 +545,8 @@ int main(const int argc, char** argv)
     adminsession.enqueueToSend( logon );
 
     listener.wait_for_session_closure();
+
+    delete ai;
 
     exit( 0 );
   }

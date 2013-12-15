@@ -20,12 +20,19 @@
 #include "exio/AdminInterface.h"
 #include "exio/AdminInterfaceImpl.h"
 #include "exio/Table.h"
+#include "config.h"
 
 #include "mutex.h"
 
 #include <iostream>
 
 namespace exio {
+
+const char* version_string()
+{
+  /* embeded the version number, and "version" string, in the binary */
+  return "exio version " PACKAGE_VERSION;
+}
 
 //----------------------------------------------------------------------
 AdminInterface::AdminInterface(Config config,
@@ -220,4 +227,16 @@ void AdminInterface::copy_rowkeys(const std::string& tablename,
   m_impl->copy_rowkeys(tablename, dest);
 }
 //----------------------------------------------------------------------
+
+
+void AdminInterface::register_ext_session(AdminSession* s)
+{
+  m_impl->register_ext_session(s);
+}
+
+
+void AdminInterface::deregister_ext_session(AdminSession* s)
+{
+  m_impl->deregister_ext_session(s);
+}
 }

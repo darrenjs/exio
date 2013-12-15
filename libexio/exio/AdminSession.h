@@ -39,36 +39,35 @@ namespace exio
 
 class AdminInterface;
 class AppSvc;
-class Reactor;
 
+
+/* Warning: the callback methods will be invoked by the AdminSession's socket
+ * reader thread. Don't use that thread, during one of the callbacks, to
+ * delete the actual AdminSession self instance! E.g. on a closed() callback,
+ * it is tempting to call delete on the session (if it was allocated on the
+ * heap).  However, don't do it!
+ */
+class AdminSession;
+class AdminSessionListener
+{
+  public:
+    virtual ~AdminSessionListener() {};
+    virtual void session_msg_received(const sam::txMessage&,
+                                      AdminSession&) = 0;
+    virtual void session_closed(AdminSession& session) = 0;
+};
 
 class AdminSession : public ClientCallback
 {
-  public:
-
-    /* Warning: the callback methods will be invoked by the AdminSession's
-     * socket reader thread. Don't use that thread, during one of the
-     * callbacks, to delete the actual AdminSession self instance! E.g. on a
-     * closed() callback, it is tempting to call delete on the session (if it
-     * was allocated on the heap).  However, don't do it!
-     */
-    class Listener
-    {
-      public:
-        virtual ~Listener() {};
-        virtual void session_msg_received(const sam::txMessage&,
-                                          AdminSession&) = 0;
-        virtual void session_closed(AdminSession& session) = 0;
-    };
 
   public:
     AdminSession(AppSvc&,
                  int fd,
-                 Listener* l,
+                 AdminSessionListener* l,
                  size_t id);
     ~AdminSession();
 
-    void init(Reactor* reactor);
+    void io_init(Client*);
 
     /* Error code indicates success.  Zero/false means no error.  Other
      * returns value indicates encoding or IO problem. */
@@ -85,12 +84,10 @@ class AdminSession : public ClientCallback
 
     const std::string & peer_serviceid() const { return m_serviceid; }
 
-
     void wants_autoclose(bool b) { m_autoclose = b; }
     bool wants_autoclose() const { return m_autoclose; }
 
-
-    virtual void io_onmsg(const sam::txMessage& src) ;
+    virtual void io_onmsg(const sam::txMessage& src);
 
     void housekeeping();
 
@@ -131,7 +128,7 @@ class AdminSession : public ClientCallback
     std::string m_username;
     std::string m_peeraddr;
 
-    Listener* m_listener;
+    AdminSessionListener* m_listener;
 
     bool m_autoclose;
 

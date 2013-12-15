@@ -48,7 +48,7 @@ struct SessionReg
     }
 };
 
-class AdminInterfaceImpl : public AdminSession::Listener
+class AdminInterfaceImpl : public AdminSessionListener
 {
   private:
 
@@ -89,6 +89,10 @@ class AdminInterfaceImpl : public AdminSession::Listener
     size_t session_count() const;
 
     void createNewSession(int fd);
+
+    /* Sessions initiated locally */
+    void   register_ext_session(AdminSession*);
+    void deregister_ext_session(AdminSession*);
 
     /* ----- Messaging ----- */
     void send_one(const sam::txMessage&,
@@ -195,6 +199,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
     static void helper_session_descr(std::ostream&, AdminSession&,
                                      const std::string&);
 
+    void init_session_io(AdminSession*);
 
 
   private:
@@ -224,7 +229,7 @@ class AdminInterfaceImpl : public AdminSession::Listener
 
         std::list< AdminSession* > items;
         cpp11::mutex lock;
-    } m_expired_sessions;
+    } m_expired_sessions, m_ext_sessions;
 
     struct
     {

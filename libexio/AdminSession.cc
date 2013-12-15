@@ -89,25 +89,6 @@ void QueuedItem::release()  // better to just use the constructor?
 SID SID::no_session = SID();
 
 
-struct AdminSessionIdGenerator
-{
-    static cpp11::mutex admin_sessionid_lock;
-    static unsigned long long admin_sessionid;
-
-    static unsigned long long next_admin_sessionid()
-    {
-      cpp11::lock_guard< cpp11::mutex > guard( admin_sessionid_lock );
-
-      return admin_sessionid++;
-    }
-
-};
-
-cpp11::mutex AdminSessionIdGenerator::admin_sessionid_lock;
-unsigned long long AdminSessionIdGenerator::admin_sessionid = 1;
-
-//----------------------------------------------------------------------
-
 std::ostream& operator<<(std::ostream& os, const SID& id)
 {
   os << id.toString();
@@ -214,12 +195,11 @@ std::string sock_descr(int fd)
 //----------------------------------------------------------------------
 AdminSession::AdminSession(AppSvc& appsvc,
                            int fd,
-                           AdminSession::Listener* l,
+                           AdminSessionListener* l,
                            size_t id)
   : m_appsvc( appsvc),
     m_id(id),
     m_fd(fd),
-//    m_id(AdminSessionIdGenerator::next_admin_sessionid(), fd),
     m_logon_received(false),
     m_session_valid(true),
     m_peeraddr( sock_descr(fd) ),
@@ -234,7 +214,7 @@ AdminSession::AdminSession(AppSvc& appsvc,
 }
 
 //----------------------------------------------------------------------
-void AdminSession::init(Reactor* reactor)
+void AdminSession::io_init(Client* client)
 {
   // once the client is constructed, we can immediately send data and also
   // receive callbacks (if there is data on the socket).
@@ -244,8 +224,9 @@ void AdminSession::init(Reactor* reactor)
   // the socket, and so also when callbacks start going into the rest of the
   // program.
 
-  m_io_handle = new Client(reactor, m_fd, m_appsvc.log(), this);
-  reactor->add_client( m_io_handle );
+  m_io_handle = client;
+//  m_io_handle = new Client(reactor, m_fd, m_appsvc.log(), this);
+//  reactor->add_client( m_io_handle );
 }
 
 //----------------------------------------------------------------------
@@ -296,9 +277,15 @@ bool AdminSession::enqueueToSend(const sam::txMessage& msg)
       {
         _ERROR_(m_appsvc.log(), "Dropping session " << m_id
                 << " due to enqueue failure");
-        return true;
+        return true;  // failure
       }
     }
+    else
+    {
+      _ERROR_(m_appsvc.log(), "No IO handle available to send message");
+      return true;  // failure
+    }
+
     /*
       size_t sz = protocol.calc_encoded_size(msg);
       _INFO_(m_appsvc.log(), "estimated " << sz << ", actual " << qi.size);
@@ -495,7 +482,9 @@ uint64_t AdminSession::bytes_pend() const
 //----------------------------------------------------------------------
 int AdminSession::fd() const
 {
-  return (m_io_handle)? m_io_handle->fd():0;
+  // we always know the fd, and it is an invariant of the session.  I.e.,
+  // there is no situation where the fd of a session will be changed.
+  return m_fd;
 }
 //----------------------------------------------------------------------
 size_t AdminSession::process_input(Client*, const char* src, int size)  // callback, from IO

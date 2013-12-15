@@ -26,6 +26,8 @@
 #include "exio/Reactor.h"
 #include "config.h"
 
+#include <algorithm>
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -689,24 +691,32 @@ void AdminInterfaceImpl::housekeeping()
 {
   session_cleanup();
 
-  // Now heartbeat on each session
-  cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
-
-
-  for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
+  // Now heartbeat on each internal session
   {
-    if (m_sessions.reg[i].used() and
-        m_sessions.reg[i].ptr->is_open())
+    cpp11::lock_guard<cpp11::mutex> guard(m_sessions.lock);
+    for (size_t i = 0; i < SESSION_REG_SIZE; ++i)
     {
-      m_sessions.reg[i].ptr->housekeeping();
+      if (m_sessions.reg[i].used() and
+          m_sessions.reg[i].ptr->is_open())
+      {
+        m_sessions.reg[i].ptr->housekeeping();
+      }
     }
   }
 
-  // for (std::map<SID, AdminSession*>::iterator it = m_sessions.items.begin();
-  //      it != m_sessions.items.end(); ++it)
-  // {
-  //   if (it->second->is_open()) it->second->housekeeping();
-  // }
+  // Now heartbeat on each external session
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_ext_sessions.lock);
+
+    for (std::list< AdminSession* >::iterator i =
+           m_ext_sessions.items.begin();
+         i != m_ext_sessions.items.end(); ++i)
+    {
+      AdminSession* s = *i;
+      s->housekeeping();
+    }
+  }
+
 }
 
 //----------------------------------------------------------------------
@@ -770,13 +780,11 @@ void AdminInterfaceImpl::createNewSession(int fd)
     m_sessions.reg[ session_index ].ptr = session;
 
     // m_sessions.items[ session->id() ] = session;
-
-
     m_sessions.createdCount++;
   }
 
   // add client to the reactor quite early, so the IO events can begin
-  session->init(m_reactor);
+  init_session_io(session);
 
   _INFO_(m_appsvc.log(), "Connection from "
          << session->peeraddr()
@@ -796,7 +804,6 @@ void AdminInterfaceImpl::createNewSession(int fd)
 
   logon.root().put_field(id::QN_serviceid, m_appsvc.conf().serviceid);
   session->enqueueToSend( logon );
-
 }
 
 //----------------------------------------------------------------------
@@ -1515,6 +1522,45 @@ AdminSession* AdminInterfaceImpl::get_session(SID id)
   }
 
   return ptr;
+}
+
+//----------------------------------------------------------------------
+
+void AdminInterfaceImpl::register_ext_session(AdminSession* session)
+{
+  init_session_io(session);
+
+  {
+    cpp11::lock_guard<cpp11::mutex> guard(m_ext_sessions.lock);
+    m_ext_sessions.items.push_back( session );
+  }
+}
+
+//----------------------------------------------------------------------
+
+void AdminInterfaceImpl::deregister_ext_session(AdminSession* sought)
+{
+  cpp11::lock_guard<cpp11::mutex> guard(m_ext_sessions.lock);
+
+  std::list< AdminSession* >::iterator it =
+    std::find(m_ext_sessions.items.begin(),
+              m_ext_sessions.items.end(),
+              sought);
+
+  if (it != m_ext_sessions.items.end())
+  {
+    m_ext_sessions.items.erase(it);
+  }
+}
+
+//----------------------------------------------------------------------
+
+
+void AdminInterfaceImpl::init_session_io(AdminSession* session)
+{
+  Client* client = new Client(m_reactor, session->fd(), m_appsvc.log(), session);
+  session->io_init(client);
+  m_reactor->add_client( client );
 }
 
 //----------------------------------------------------------------------

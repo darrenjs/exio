@@ -22,6 +22,8 @@
 
 #include <string>
 
+#define EXIO_NO_SERVER -1
+
 namespace exio
 {
 
@@ -29,7 +31,7 @@ struct Config
 {
     std::string serviceid;
 
-    // Port to listen on of a server socket is created
+    // Port to listen, or EXIO_NO_SERVER to disable server socket
     int server_port;
 };
 
