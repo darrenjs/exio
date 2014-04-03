@@ -33,12 +33,12 @@ class AdminSessionListener;
 
 /* Commonly used alert severity codes - note, leading two digits are the Alert
  * Severity Rating (ASR) */
-static std::string const SEV_CRITICAL = "70-critical";
-static std::string const SEV_HIGH     = "60-high";
+static std::string const SEV_CRITICAL = "90-critical";
+static std::string const SEV_HIGH     = "70-high";
 static std::string const SEV_MODERATE = "50-moderate";
-static std::string const SEV_LOW      = "40-low";
-static std::string const SEV_INFO     = "30-info";
-static std::string const SEV_DEBUG    = "20-debug";
+static std::string const SEV_LOW      = "30-low";
+static std::string const SEV_INFO     = "20-info";
+static std::string const SEV_DEBUG    = "10-debug";
 
 
 const char* version_string();
