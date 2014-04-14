@@ -16,6 +16,9 @@ AC_CONFIG_HEADERS([config.h])
 
 
 AC_PROG_CXX
+AC_LANG([C++])
+AM_PROG_AR
+
 AC_CONFIG_MACRO_DIR([m4])
 
 
