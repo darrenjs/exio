@@ -24,6 +24,9 @@
 #AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb  -I$(XLOGHOME)/include
 AM_CPPFLAGS = -I$(top_srcdir)/libcpp11  -Wall -g3 -ggdb
 
+
+AM_LDFLAGS=-lpthread
+
 # Primary defination of our shared library to be created.  Notice the
 # _LTLIBRARIES key: automake is looking specifically for this pattern and then
 # generating make rules which will invoke libtool.
@@ -55,7 +58,7 @@ Client.cc ReactorReadBuffer.cc
 # <library_LIBADD> : extras libtool objects to add to library
 #
 #libexio_la_CPPFLAGS =
-libexio_la_LIBADD  = ../libcpp11/libcpp11.la
+libexio_la_LIBADD  = ../libcpp11/libcpp11.la -lpthread
 
 # Note: version info for shared libraries is three number system, where the
 # numbers represent: CURRENT : REVISION : AGE
