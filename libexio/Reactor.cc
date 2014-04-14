@@ -18,6 +18,11 @@
     along with exio.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* Feature test, to safely use POLLRDHUP */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "exio/Reactor.h"
 #include "exio/Logger.h"
 #include "exio/AdminInterface.h"
@@ -41,7 +46,14 @@
 #include <linux/unistd.h>
 #include <sys/syscall.h>
 
+/* If POLLRDHUP is not defined, then lets define it so that its later usage
+ * does nothing. */
+#ifndef POLLRDHUP
+#define POLLRDHUP 0x00
+#endif
+
 namespace exio {
+
 
 
 void eventstr(std::ostream& os, int e)
