@@ -2,6 +2,35 @@ TODO for libadmin
 =================
 
 
+Phase 2 improvements
+
+* Use json, but, continue to also support SAM
+
+* remove the txContainer stuff
+
+* clean up the public classes, eg, AdminInterface, AdminCommand
+  -> don't expose std::vector
+
+* define a welcome banner, instead of the help screen
+  -> allow html type output, or, text output etc.
+
+* keep drop_session?
+
+* simply some of the clever things
+
+* admin should not subscribe by default; instead return list of commands
+
+* Allow AdminResponse to take no params, in which case the reqseqno should be
+  able to be set automatically.
+
+      exio::AdminResponse hello(exio::AdminRequest& req)
+      {
+         std::cout << "someone says hello\n";
+         return exio::AdminResponse::success();
+      }
+
+* support Java
+
 01/11/13
 --------
 
