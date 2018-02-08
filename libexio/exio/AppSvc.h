@@ -41,10 +41,10 @@ class LogService
   public:
     virtual ~LogService() {}
 
-    virtual void debug(const std::string& msg, const char* file, int ln) {}
-    virtual void info(const std::string& msg,  const char* file, int ln) {}
-    virtual void warn(const std::string& msg,  const char* file, int ln) {}
-    virtual void error(const std::string& msg, const char* file, int ln) {}
+    virtual void debug(const std::string&, const char*, int) {}
+    virtual void info(const std::string&,  const char*, int) {}
+    virtual void warn(const std::string&,  const char*, int) {}
+    virtual void error(const std::string&, const char*, int) {}
 
     virtual bool want_debug() { return false; }
     virtual bool want_info()  { return false; }
